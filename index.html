@@ -1,0 +1,955 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Meteo ATC 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Concepto: ventana de torre de control. La escena 3D es el cristal de la cabina; a su lado, el panel de instrumentos con los mandos del tiempo. En móvil la escena queda fija arriba y los mandos se desplazan debajo. */
+:root{
+  --bg:#EBF0F4; --surface:#FFFFFF; --surface2:#E1E8EE; --ink:#0F1B25; --muted:#566878; --line:#C6D1DB;
+  --accent:#D9480F; --accent-ink:#FFFFFF; --blue:#1C6DD0; --teal:#1F8A7A;
+  --vfr:#1E9650; --mvfr:#2B6BDB; --ifr:#D3322E; --lifr:#A62F96;
+  --lv-alta:#3F7DC4; --lv-media:#2E8F7C; --lv-baja:#A9741D; --lv-vert:#B8452F; --catink:#FFFFFF;
+  --hud:rgba(11,19,28,.82); --hud-ink:#EAF1F6; --hud-line:rgba(255,255,255,.2);
+  --f-display:'Barlow Condensed','Arial Narrow',sans-serif;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0C1620; --surface:#15222E; --surface2:#1D2D3B; --ink:#E7EEF3; --muted:#94A6B5; --line:#2B3C4B;
+  --accent:#FF8A4C; --accent-ink:#1A0C03; --blue:#5AA2F0; --teal:#4CC2AE;
+  --vfr:#3CC273; --mvfr:#5C93F2; --ifr:#F2625D; --lifr:#D676C8; --catink:#08140D; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0C1620; --surface:#15222E; --surface2:#1D2D3B; --ink:#E7EEF3; --muted:#94A6B5; --line:#2B3C4B;
+  --accent:#FF8A4C; --accent-ink:#1A0C03; --blue:#5AA2F0; --teal:#4CC2AE;
+  --vfr:#3CC273; --mvfr:#5C93F2; --ifr:#F2625D; --lifr:#D676C8; --catink:#08140D; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;
+  padding-block:0 20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px 10px;max-width:1500px;margin:0 auto}
+.top h1{font:700 30px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase;margin:0}
+.top h1 span{color:var(--accent)}
+.top p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.catpill{font:700 20px/1 var(--f-display);letter-spacing:.06em;padding:8px 14px;border-radius:6px;color:var(--catink);background:var(--vfr);white-space:nowrap}
+.catpill small{display:block;font:500 11px/1.2 var(--f-body);letter-spacing:.02em;opacity:.9;margin-top:3px}
+
+.app{display:grid;grid-template-columns:minmax(0,1fr) 410px;gap:14px;max-width:1500px;margin:0 auto;align-items:start}
+.stage{position:sticky;top:env(safe-area-inset-top,0px);height:calc(100vh - 92px);min-height:420px;border-radius:10px;overflow:hidden;background:#0a1220;z-index:5}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#c:active{cursor:grabbing}
+.hud{position:absolute;color:var(--hud-ink);background:var(--hud);border:1px solid var(--hud-line);border-radius:8px;backdrop-filter:blur(4px)}
+.hud-tl{left:10px;top:10px;display:flex;padding:3px;gap:2px}
+.hud-tr{right:10px;top:10px;display:flex;flex-wrap:wrap;gap:4px;padding:4px;justify-content:flex-end;max-width:62%}
+.hud button{background:transparent;border:0;border-radius:5px;padding:6px 10px;font:600 14px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--hud-ink);opacity:.72}
+.hud button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);opacity:1}
+.hud-bot{left:10px;right:10px;bottom:10px;padding:8px 10px;display:flex;gap:10px;align-items:center}
+.hud-bot code{font:600 12.5px/1.45 var(--f-mono);letter-spacing:.01em;word-break:break-word;flex:1;min-width:0}
+.hud-bot .lbl{font:600 11px/1 var(--f-display);letter-spacing:.12em;text-transform:uppercase;opacity:.65;white-space:nowrap}
+.hint-drag{position:absolute;left:12px;bottom:70px;font-size:11.5px;color:#cfe0ee;opacity:.8;pointer-events:none;text-shadow:0 1px 3px #000}
+#nogl{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:#cfe0ee}
+
+.panel{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--line);background:var(--surface2);scrollbar-width:thin}
+.tabs button{flex:1 0 auto;background:none;border:0;padding:11px 10px 9px;font:600 15px/1 var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-bottom:3px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);background:var(--surface)}
+.pane{padding:14px;display:none;flex-direction:column;gap:14px}
+.pane.on{display:flex}
+.h{font:600 13px/1 var(--f-display);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0}
+.sec{display:flex;flex-direction:column;gap:9px;min-width:0}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+
+.chip{background:var(--surface2);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;font-weight:500;line-height:1.15;text-align:left}
+.chip[aria-pressed="true"],.chip.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chip.sm{padding:6px 9px;font-size:12.5px}
+.layer-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.layer-tabs .lt{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2)}
+.layer-tabs .lt[aria-pressed="true"]{border-color:var(--lc);box-shadow:inset 0 -3px 0 var(--lc);background:var(--surface)}
+.lt i{width:10px;height:10px;border-radius:50%;background:var(--lc);flex:none;opacity:.35}
+.lt.act i{opacity:1}
+.lt b{font:700 17px/1 var(--f-display);letter-spacing:.05em}
+.lt small{display:block;color:var(--muted);font-size:11px;line-height:1.2}
+.switch{display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer}
+.switch input{width:18px;height:18px;accent-color:var(--accent)}
+
+.types{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px}
+.type{display:flex;flex-direction:column;gap:2px;padding:8px 9px 8px 12px;border-radius:7px;border:1px solid var(--line);background:var(--surface2);position:relative;text-align:left}
+.type::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:4px;border-radius:0 3px 3px 0;background:var(--lv)}
+.type b{font:700 20px/1 var(--f-display);letter-spacing:.05em}
+.type span{font-size:11.5px;color:var(--muted);line-height:1.15}
+.type[aria-pressed="true"]{background:var(--ink);border-color:var(--ink)}
+.type[aria-pressed="true"] b,.type[aria-pressed="true"] span{color:var(--surface)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:var(--lv)}
+
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld .top2{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.fld label{font-weight:500}
+.fld output{font:600 13px/1 var(--f-mono);color:var(--ink);background:var(--surface2);padding:4px 7px;border-radius:5px;white-space:nowrap}
+.fld input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
+.fld .sub{font-size:12px;color:var(--muted)}
+
+.card{border:1px solid var(--line);border-radius:9px;padding:12px;background:var(--surface);display:flex;flex-direction:column;gap:7px;min-width:0}
+.card.tint{background:var(--surface2)}
+.card h3{margin:0;font:700 24px/1 var(--f-display);letter-spacing:.04em;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.card h3 small{font:500 13px var(--f-body);color:var(--muted);letter-spacing:0}
+.card p{margin:0}
+.kv{display:grid;grid-template-columns:104px minmax(0,1fr);gap:4px 10px;font-size:13px}
+.kv dt{color:var(--muted);font-weight:500}
+.kv dd{margin:0;min-width:0}
+.tag{display:inline-block;font:600 11px/1 var(--f-display);letter-spacing:.1em;text-transform:uppercase;padding:4px 7px;border-radius:4px;background:var(--lv,var(--muted));color:#fff}
+
+.altwrap{display:flex;gap:14px;align-items:stretch}
+.altbar{position:relative;width:64px;height:230px;flex:none;border-radius:6px;overflow:hidden;background:linear-gradient(to top,color-mix(in srgb,var(--lv-baja) 26%,var(--surface2)) 0 38%,color-mix(in srgb,var(--lv-media) 26%,var(--surface2)) 38% 67%,color-mix(in srgb,var(--lv-alta) 26%,var(--surface2)) 67% 100%)}
+.altbar .tick{position:absolute;left:0;right:0;border-top:1px dashed var(--line);font:500 10px/1 var(--f-mono);color:var(--muted)}
+.altbar .tick span{position:absolute;right:3px;top:-12px;background:transparent}
+.altbar .seg{position:absolute;width:12px;border-radius:3px;background:var(--lc);min-height:3px}
+.altbar .fz{position:absolute;left:0;right:0;height:2px;background:var(--blue)}
+.altnotes{flex:1;min-width:0;font-size:12.5px;display:flex;flex-direction:column;gap:6px;color:var(--muted)}
+.altnotes b{color:var(--ink)}
+
+.presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.preset{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);text-align:left;font-weight:600;font-size:13px;line-height:1.2}
+.preset small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:2px}
+.preset:hover{border-color:var(--accent)}
+
+.data-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.metric{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--surface2);min-width:0}
+.metric .l{font:600 11px/1 var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.metric .v{font:600 15px/1.25 var(--f-mono);margin-top:5px;word-break:break-word}
+.metric .n{font-size:11.5px;color:var(--muted);margin-top:2px}
+.hints{display:flex;flex-direction:column;gap:6px}
+.hint{display:flex;gap:9px;font-size:13px;padding:8px 10px;border-radius:7px;background:var(--surface2);border-left:4px solid var(--blue)}
+.hint.warn{border-left-color:var(--accent)}
+.hint.bad{border-left-color:var(--ifr)}
+.hint.ok{border-left-color:var(--vfr)}
+.rw{display:flex;align-items:center;gap:12px}
+.rw svg{flex:none;width:96px;height:96px}
+
+table.ref{width:100%;border-collapse:collapse;font-size:12.5px}
+table.ref th,table.ref td{padding:6px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.ref th{font:600 11px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.scroll-x{overflow-x:auto}
+.cat-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--c)}
+.rule{font-size:13px;padding-left:12px;border-left:3px solid var(--accent)}
+.rule b{font-family:var(--f-mono);font-weight:600}
+
+.quiz-q{font-weight:600}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.opts button{padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);font-weight:600}
+.opts button.right{background:var(--vfr);border-color:var(--vfr);color:var(--catink)}
+.opts button.wrong{background:var(--ifr);border-color:var(--ifr);color:var(--catink)}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:11px 14px;font:700 17px/1 var(--f-display);letter-spacing:.07em;text-transform:uppercase}
+.btn.ghost{background:var(--surface2);color:var(--ink);border:1px solid var(--line)}
+.score{font:600 13px var(--f-mono);color:var(--muted)}
+
+@media (max-width:980px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .stage{height:46vh;min-height:300px;max-height:460px;position:sticky}
+  .top h1{font-size:25px}.top p{display:none}
+  .hud-tr{top:52px;left:10px;right:auto;max-width:calc(100% - 20px);flex-wrap:nowrap;justify-content:flex-start}
+  .hint-drag{display:none}
+  .hud-bot .lbl{display:none}
+}
+@media (max-width:420px){
+  .kv{grid-template-columns:92px minmax(0,1fr)}
+  .presets{grid-template-columns:minmax(0,1fr)}
+  .hud button{padding:6px 8px;font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<header class="top">
+  <div>
+    <h1>Meteo <span>ATC</span> 3D</h1>
+    <p>Laboratorio de meteorología para controladores de tránsito aéreo</p>
+  </div>
+  <div class="catpill" id="catpill" aria-live="polite">VFR<small>Categoría de vuelo</small></div>
+</header>
+
+<main class="app">
+  <section class="stage" aria-label="Escena 3D del aeródromo">
+    <canvas id="c" aria-label="Vista 3D interactiva del cielo y el aeródromo"></canvas>
+    <div class="hud hud-tl" role="group" aria-label="Cámara">
+      <button id="vOrbit" aria-pressed="true">Órbita</button>
+      <button id="vTower" aria-pressed="false">Torre</button>
+      <button id="vReset" aria-pressed="false">Reiniciar</button>
+    </div>
+    <div class="hud hud-tr" role="group" aria-label="Capas de la escena">
+      <button id="tgLv" aria-pressed="true">Niveles</button>
+      <button id="tgFz" aria-pressed="true">0 °C</button>
+      <button id="tgWd" aria-pressed="true">Viento</button>
+      <button id="tgTr" aria-pressed="true">Tráfico</button>
+    </div>
+    <div class="hint-drag" id="dragHint">Arrastra para girar · rueda o pellizco para acercar</div>
+    <div class="hud hud-bot"><span class="lbl">METAR</span><code id="metarHud">…</code></div>
+    <div id="nogl"><p>Tu dispositivo no pudo iniciar los gráficos 3D (WebGL). Prueba con otro navegador.</p></div>
+  </section>
+
+  <aside class="panel">
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-t="nubes" aria-selected="true">Nubes</button>
+      <button role="tab" data-t="tiempo" aria-selected="false">Tiempo</button>
+      <button role="tab" data-t="viento" aria-selected="false">Viento</button>
+      <button role="tab" data-t="datos" aria-selected="false">Datos</button>
+      <button role="tab" data-t="guia" aria-selected="false">Guía</button>
+      <button role="tab" data-t="practica" aria-selected="false">Práctica</button>
+    </div>
+
+    <div class="pane on" id="p-nubes">
+      <div class="sec"><p class="h">Capas de nubes (como en un METAR)</p>
+        <div class="layer-tabs" id="layerTabs"></div>
+        <label class="switch"><input type="checkbox" id="layerOn"> Capa activa</label>
+      </div>
+      <div class="sec"><p class="h">Tipo de nube</p>
+        <div class="types" id="types"></div>
+        <div class="legend">
+          <span style="--lv:var(--lv-alta)"><i></i>Altas</span><span style="--lv:var(--lv-media)"><i></i>Medias</span>
+          <span style="--lv:var(--lv-baja)"><i></i>Bajas</span><span style="--lv:var(--lv-vert)"><i></i>Desarrollo vertical</span>
+        </div>
+      </div>
+      <div class="sec" id="cloudCtl"></div>
+      <div class="sec"><p class="h">Dónde está cada capa</p>
+        <div class="altwrap"><div class="altbar" id="altbar" aria-hidden="true"></div><div class="altnotes" id="altnotes"></div></div>
+      </div>
+      <div class="card tint" id="typeCard"></div>
+    </div>
+
+    <div class="pane" id="p-tiempo">
+      <div class="sec"><p class="h">Situaciones listas</p><div class="presets" id="presets"></div></div>
+      <div class="sec"><p class="h">Fenómeno meteorológico</p>
+        <div class="row" id="wxChips"></div>
+        <div class="row" id="intenChips"></div>
+      </div>
+      <div class="sec" id="atmCtl"></div>
+    </div>
+
+    <div class="pane" id="p-viento">
+      <div class="sec" id="windCtl"></div>
+      <div class="card tint rw"><svg id="rwSvg" viewBox="0 0 100 100" aria-label="Viento respecto a la pista"></svg><div id="rwTxt" style="min-width:0"></div></div>
+    </div>
+
+    <div class="pane" id="p-datos">
+      <div class="sec"><p class="h">METAR generado</p><div class="card tint"><code id="metarBig" style="font:600 13.5px/1.5 var(--f-mono);word-break:break-word"></code></div></div>
+      <div class="data-grid" id="metrics"></div>
+      <div class="sec"><p class="h">Lectura del tiempo</p><div class="hints" id="hints"></div></div>
+      <div class="sec"><p class="h">Tráfico y decisión del ATC</p><div class="hints" id="trafficBox"></div></div>
+    </div>
+
+    <div class="pane" id="p-guia"></div>
+
+    <div class="pane" id="p-practica">
+      <div class="card tint"><p>Genera un escenario aleatorio. El METAR aparece sobre la escena: léelo, mira el cielo y responde.</p>
+        <div class="row"><button class="btn" id="qNew">Nuevo escenario</button><span class="score" id="qScore">0 / 0</span></div>
+      </div>
+      <div class="sec" id="qBox"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+/* ========= utilidades ========= */
+const FT=0.3048/1000, R=40, RAD=Math.PI/180;
+const $=(s,r)=>(r||document).querySelector(s);
+const $$=(s,r)=>Array.from((r||document).querySelectorAll(s));
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+const pad=(n,l)=>String(Math.round(n)).padStart(l,'0');
+const fmt=n=>Math.round(n).toLocaleString('es-PA').replace(/ /g,' ');
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* ========= datos de nubes (altura en ft sobre el aeródromo) ========= */
+const LVL={alta:'--lv-alta',media:'--lv-media',baja:'--lv-baja',vert:'--lv-vert'};
+const TYPES={
+ Ci:{n:'Cirrus',lvl:'alta',min:20000,max:45000,def:30000,add:3000,cell:12,kind:'cell',op:.6,lo:0xdfe8f2,hi:0xffffff,seed:1,
+  look:'Filamentos finos y sedosos de cristales de hielo.',prec:'Ninguna',
+  haz:'No son peligrosas en sí. Hebras largas y alineadas pueden marcar una corriente en chorro, con turbulencia en aire claro (CAT) cerca.',
+  atc:'No forman techo. Su espesor creciente (Ci → Cs) anuncia un frente cálido a 12–24 h.'},
+ Cc:{n:'Cirrocúmulus',lvl:'alta',min:20000,max:40000,def:26000,add:2000,cell:8,kind:'cell',op:.9,lo:0xdde5ee,hi:0xffffff,seed:2,
+  look:'Grano fino o "cielo aborregado" blanco, sin sombras propias.',prec:'Ninguna',
+  haz:'Poco frecuentes. Señalan inestabilidad en niveles altos; turbulencia ligera posible.',
+  atc:'No afectan al techo ni a la visibilidad.'},
+ Cs:{n:'Cirrostratus',lvl:'alta',min:20000,max:40000,def:26000,add:4000,cell:18,kind:'sheet',op:.38,lo:0xd8e1ea,hi:0xf6f9fc,seed:3,
+  look:'Velo blanquecino y uniforme. Produce halo alrededor del sol o la luna.',prec:'Ninguna',
+  haz:'Sin riesgo directo. Los cristales de hielo no causan engelamiento relevante.',
+  atc:'Anuncia la llegada de un frente cálido: bajan las nubes y luego llega la lluvia.'},
+ Ac:{n:'Altocúmulus',lvl:'media',min:6500,max:20000,def:12000,add:3000,cell:8,kind:'cell',op:1,lo:0x9aa5b2,hi:0xf2f5f8,seed:4,
+  look:'Glóbulos o rollos blancos y grises en hileras, con zonas sombreadas.',prec:'Ninguna o virga',
+  haz:'Engelamiento ligero posible. La variedad castellanus (torreones) indica inestabilidad: tormentas posibles en horas.',
+  atc:'Pocas veces forman techo operativo.'},
+ As:{n:'Altostratus',lvl:'media',min:6500,max:20000,def:14000,add:6000,cell:16,kind:'sheet',op:.82,lo:0x7d8794,hi:0xb9c2cc,seed:5,
+  look:'Capa gris azulada. El sol se ve como a través de un vidrio esmerilado.',prec:'Lluvia o nieve débil continua si espesa',
+  haz:'Engelamiento posible entre 0 °C y −20 °C. Si baja y espesa, evoluciona a Ns.',
+  atc:'Precede a lluvia continua en un frente cálido.'},
+ Sc:{n:'Estratocúmulo',lvl:'baja',min:500,max:6500,def:2500,add:2500,cell:10,kind:'sheet',op:1,lo:0x808a96,hi:0xdfe4ea,seed:6,
+  look:'Capa baja de rollos o masas grises con huecos de cielo claro.',prec:'Llovizna débil ocasional',
+  haz:'Turbulencia ligera en la capa. Engelamiento ligero si hace frío.',
+  atc:'Muy común como techo BKN/OVC: pasa de VFR a MVFR o IFR según la altura de la base.'},
+ St:{n:'Estratos',lvl:'baja',min:100,max:2000,def:600,add:1500,cell:13,kind:'sheet',op:1,lo:0x8a929c,hi:0xb5bcc4,seed:7,
+  look:'Capa gris uniforme, sin forma, con la base muy baja. Parece niebla elevada.',prec:'Llovizna (DZ), granos de nieve',
+  haz:'Techo y visibilidad bajos. Engelamiento ligero con temperaturas bajo cero.',
+  atc:'Causa típica de IFR/LIFR en madrugada con T−Td ≤ 2 °C. Define mínimos de aproximación.'},
+ Ns:{n:'Nimbostratus',lvl:'baja',min:500,max:10000,def:1500,add:12000,cell:18,kind:'sheet',op:1,lo:0x3a414b,hi:0x6f7782,seed:8,
+  look:'Capa gris oscura muy espesa que oculta el sol, con jirones (fractus) debajo.',prec:'Lluvia o nieve continua (RA, SN)',
+  haz:'Visibilidad reducida bajo la capa y engelamiento posible por encima del nivel de 0 °C.',
+  atc:'IFR sostenido durante horas. Se cierra el cielo por completo (OVC).'},
+ Cu:{n:'Cúmulos',lvl:'baja',min:500,max:6500,def:3500,add:3500,cell:6,kind:'cell',op:1,lo:0x9aa3ad,hi:0xffffff,seed:9,
+  look:'Nubes aisladas de base plana y copa en forma de coliflor.',prec:'Ninguna o chubasco débil',
+  haz:'Térmicas: turbulencia ligera o moderada bajo y dentro de la nube.',
+  atc:'Buen tiempo. Base estimada ≈ (T − Td) × 400 ft.'},
+ TCU:{n:'Cúmulo congestus',lvl:'vert',min:1000,max:5000,def:2500,add:18000,cell:9,kind:'cell',op:1,lo:0x8a929c,hi:0xffffff,seed:10,
+  look:'Cúmulo con gran crecimiento vertical, torres que se elevan rápido.',prec:'Chubascos (SHRA), a veces fuertes',
+  haz:'Turbulencia moderada a fuerte y engelamiento en el ascenso. Puede evolucionar a Cb.',
+  atc:'Se codifica en el METAR como TCU (p. ej. BKN025TCU). Prepara desvíos.'},
+ Cb:{n:'Cumulonimbo',lvl:'vert',min:1000,max:5000,def:2500,add:35000,cell:14,kind:'cell',op:1,lo:0x2f353e,hi:0xffffff,seed:11,
+  look:'Torre enorme con base oscura y cima en forma de yunque.',prec:'Chubascos fuertes, granizo (GR), rayos (TS)',
+  haz:'Turbulencia severa, engelamiento severo, granizo, cizalladura y microrráfagas, rayos.',
+  atc:'Se codifica CB. Evitar a 20 NM como mínimo; retenciones, desvíos y posible cierre de pista.'}
+};
+const TKEYS=['Ci','Cc','Cs','Ac','As','Sc','St','Ns','Cu','TCU','Cb'];
+const COVER=o=>o<=0?'SKC':o<=2?'FEW':o<=4?'SCT':o<=7?'BKN':'OVC';
+const LAYCOL=['var(--accent)','var(--blue)','var(--teal)'];
+
+/* ========= fenómenos ========= */
+const WX={
+ NONE:{n:'Ninguno',code:''},
+ BR:{n:'Neblina',code:'BR',vis:{'':3500},p:null,info:'Humedad alta (T−Td ≤ 2 °C). Visibilidad 1 000–5 000 m.'},
+ HZ:{n:'Bruma seca',code:'HZ',vis:{'':4000},p:null,info:'Partículas secas, aire con T−Td > 3 °C. Visibilidad ≤ 5 000 m.'},
+ FG:{n:'Niebla',code:'FG',vis:{'':400},p:null,info:'Visibilidad < 1 000 m, con T−Td ≈ 0–1 °C.'},
+ DZ:{n:'Llovizna',code:'DZ',vis:{'-':6000,'':4000,'+':2000},p:'rain',info:'Gotas muy finas desde estratos (St).'},
+ RA:{n:'Lluvia',code:'RA',vis:{'-':8000,'':5000,'+':2000},p:'rain',info:'Precipitación continua desde Ns o As.'},
+ SHRA:{n:'Chubasco',code:'SHRA',vis:{'-':8000,'':6000,'+':3000},p:'rain',info:'Precipitación intermitente de nubes convectivas (Cu, TCU, Cb).'},
+ TSRA:{n:'Tormenta con lluvia',code:'TSRA',vis:{'':4000,'+':1500},p:'rain',info:'Cb con rayos y lluvia.'},
+ TSGR:{n:'Tormenta con granizo',code:'TSGR',vis:{'':3000,'+':1500},p:'hail',info:'Cb con rayos y granizo.'},
+ SN:{n:'Nieve',code:'SN',vis:{'-':5000,'':2500,'+':800},p:'snow',info:'Nieve desde Ns o As con T cercana o bajo 0 °C.'}
+};
+const WXK=Object.keys(WX);
+const HAS_INT=k=>['DZ','RA','SHRA','TSRA','TSGR','SN'].includes(k);
+const INTN={'-':'Ligera','':'Moderada','+':'Fuerte'};
+
+/* ========= estado ========= */
+const S={
+ layers:[{on:true,type:'Cu',okt:3,base:3500},{on:false,type:'Ac',okt:3,base:12000},{on:false,type:'Ci',okt:3,base:30000}],
+ sel:0,wx:'NONE',inten:'',vis:9999,T:28,Td:20,qnh:1013,wdir:90,wspd:8,gust:0,rwy:9,hour:11,
+ view:'orbit',showLv:true,showFz:true,showWind:true,showTr:true
+};
+const ELEV=100; // elevación del aeródromo ficticio (ft)
+const rwyB=n=>((n+17)%36)+1;
+
+/* ========= escena ========= */
+const canvas=$('#c');
+let renderer;
+try{
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,logarithmicDepthBuffer:true,powerPreference:'high-performance'});
+}catch(e){$('#nogl').style.display='flex';return}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(50,1,0.002,900);
+scene.fog=new THREE.FogExp2(0xbfd9f0,0.01);
+
+const skyU={top:{value:new THREE.Color(0x3b7fd0)},bot:{value:new THREE.Color(0xbfd9f0)}};
+const sky=new THREE.Mesh(new THREE.SphereGeometry(500,32,16),new THREE.ShaderMaterial({uniforms:skyU,side:THREE.BackSide,depthWrite:false,depthTest:false,fog:false,
+  vertexShader:'varying float h;void main(){h=normalize(position).y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+  fragmentShader:'uniform vec3 top;uniform vec3 bot;varying float h;void main(){float t=pow(clamp(h,0.,1.),0.5);gl_FragColor=vec4(mix(bot,top,t),1.);}'}));
+sky.renderOrder=-1000;sky.frustumCulled=false;scene.add(sky);
+
+const hemi=new THREE.HemisphereLight(0xcfe3ff,0x4a5a3a,0.8);
+const sun=new THREE.DirectionalLight(0xfff2dd,1.1);
+scene.add(hemi,sun);
+
+/* ---- terreno ---- */
+function hash(i,j){const h=Math.sin(i*127.1+j*311.7)*43758.5453;return h-Math.floor(h)}
+function vnoise(x,y){const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
+  return lerp(lerp(hash(i,j),hash(i+1,j),u),lerp(hash(i,j+1),hash(i+1,j+1),u),v)}
+function fbm(x,y){return vnoise(x,y)*.55+vnoise(x*2.1,y*2.1)*.28+vnoise(x*4.3,y*4.3)*.17}
+function terrainH(x,z){const r=Math.hypot(x,z);const m=smooth(4,12,r)*(1-smooth(46,58,r));
+  let h=Math.pow(fbm(x*.06+10,z*.06+3),1.7)*.8;const dx=x+20,dz=z+16;h+=1.15*Math.exp(-(dx*dx+dz*dz)/55);return h*m}
+(function(){
+  const g=new THREE.PlaneGeometry(120,120,150,150);g.rotateX(-Math.PI/2);
+  const p=g.attributes.position,col=new Float32Array(p.count*3),c=new THREE.Color(),lo=new THREE.Color(0x5d8240),mid=new THREE.Color(0x8c7d55),hi=new THREE.Color(0xdde1e4);
+  for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),h=terrainH(x,z);p.setY(i,h);
+    if(h<.25)c.copy(lo).lerp(mid,h/.25*.35);else if(h<.85)c.copy(lo).lerp(mid,.35+(h-.25)/.6*.65);else c.copy(mid).lerp(hi,clamp((h-.85)/.35,0,1));
+    const n=hash(Math.round(x*3),Math.round(z*3))*.08-.04;col[i*3]=clamp(c.r+n,0,1);col[i*3+1]=clamp(c.g+n,0,1);col[i*3+2]=clamp(c.b+n,0,1)}
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));g.computeVertexNormals();
+  scene.add(new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true})));
+  const far=new THREE.Mesh(new THREE.PlaneGeometry(1800,1800).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0x5d8240}));
+  far.position.y=-0.004;scene.add(far);
+})();
+
+/* ---- etiquetas ---- */
+function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
+function labelSprite(txt,o){o=Object.assign({w:300,h:64,fs:30,col:'#ffffff',bg:'rgba(10,18,28,.7)',sx:4.6,sy:1},o||{});
+  const c=document.createElement('canvas');c.width=o.w;c.height=o.h;const t=new THREE.CanvasTexture(c);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,fog:false}));
+  s.userData={c,t,o};s.scale.set(o.sx,o.sy,1);setLabel(s,txt);return s}
+function setLabel(s,txt){const {c,t,o}=s.userData,g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);
+  g.fillStyle=o.bg;rr(g,2,2,c.width-4,c.height-4,12);g.fill();g.fillStyle=o.col;g.font='600 '+o.fs+'px "IBM Plex Mono",ui-monospace,monospace';
+  g.textAlign='center';g.textBaseline='middle';g.fillText(txt,c.width/2,c.height/2+2);t.needsUpdate=true}
+
+/* ---- aeródromo (la pista gira con el rumbo elegido) ---- */
+const rwy=new THREE.Group();scene.add(rwy);
+const rwC=document.createElement('canvas');rwC.width=2048;rwC.height=82;
+const rwT=new THREE.CanvasTexture(rwC);rwT.anisotropy=8;
+const rwMesh=new THREE.Mesh(new THREE.PlaneGeometry(3.0,0.12).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:rwT}));
+rwMesh.position.y=.0006;rwy.add(rwMesh);
+function drawRunway(){const g=rwC.getContext('2d'),W=2048,H=82;g.fillStyle='#3b3e43';g.fillRect(0,0,W,H);
+  g.fillStyle='#e9e9e9';g.fillRect(0,3,W,2);g.fillRect(0,H-5,W,2);
+  for(let x=200;x<W-200;x+=72)g.fillRect(x,H/2-1.5,40,3);
+  for(const e of [0,1])for(let k=0;k<8;k++){g.fillRect(e?W-96:36,10+k*8.6,60,5)}
+  g.font='700 34px Arial';g.textAlign='center';g.textBaseline='middle';
+  g.save();g.translate(138,H/2);g.rotate(Math.PI/2);g.fillText(pad(S.rwy,2),0,0);g.restore();
+  g.save();g.translate(W-138,H/2);g.rotate(-Math.PI/2);g.fillText(pad(rwyB(S.rwy),2),0,0);g.restore();rwT.needsUpdate=true}
+const apron=new THREE.Mesh(new THREE.PlaneGeometry(.8,.07).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0x62666c}));
+apron.position.set(.1,.0005,.11);rwy.add(apron);
+const term=new THREE.Mesh(new THREE.BoxGeometry(.16,.012,.03),new THREE.MeshLambertMaterial({color:0xcfd5db}));
+term.position.set(-.55,.006,.3);rwy.add(term);
+const tower=new THREE.Group();tower.position.set(.1,0,.17);rwy.add(tower);
+(function(){const m1=new THREE.MeshLambertMaterial({color:0xe6e9ec}),m2=new THREE.MeshLambertMaterial({color:0x4aa3d8});
+  const sh=new THREE.Mesh(new THREE.CylinderGeometry(.0035,.005,.028,14),m1);sh.position.y=.014;
+  const cab=new THREE.Mesh(new THREE.CylinderGeometry(.0105,.0075,.008,14),m2);cab.position.y=.032;
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(.0105,.004,14),m1);roof.position.y=.038;
+  tower.add(sh,cab,roof)})();
+/* manga de viento */
+const sockPole=new THREE.Group();sockPole.position.set(-.45,0,.1);rwy.add(sockPole);
+const sockPivot=new THREE.Group();sockPivot.position.y=.014;sockPole.add(sockPivot);
+(function(){const pole=new THREE.Mesh(new THREE.CylinderGeometry(.0006,.0006,.014,6),new THREE.MeshLambertMaterial({color:0xdddddd}));pole.position.y=.007;sockPole.add(pole);
+  const cg=new THREE.ConeGeometry(.0035,.016,10,1,true);cg.rotateZ(-Math.PI/2);cg.translate(.008,0,0);
+  const cone=new THREE.Mesh(cg,new THREE.MeshLambertMaterial({color:0xff6a1a,side:THREE.DoubleSide}));sockPivot.add(cone)})();
+/* luces de pista */
+const rwLights=(function(){const pts=[];for(let x=-1.5;x<=1.5;x+=.06){pts.push(x,.002,.063,x,.002,-.063)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  const p=new THREE.Points(g,new THREE.PointsMaterial({color:0xfff0b0,size:3,sizeAttenuation:false}));rwy.add(p);return p})();
+/* postes de visibilidad (para estimar la visibilidad desde la torre) */
+const posts=new THREE.Group();rwy.add(posts);
+[.4,.8,1.5,3,5].forEach(d=>{const b=new THREE.Mesh(new THREE.BoxGeometry(.003+d*.002,.012+d*.012,.006+d*.004),new THREE.MeshLambertMaterial({color:0xff7a1a}));
+  b.position.set(.1+d,(.012+d*.012)/2,.3);posts.add(b);
+  const lb=labelSprite(d<1?(d*1000)+' m':d+' km',{w:200,h:56,fs:30,sx:.08+d*.05,sy:(.08+d*.05)*.28});lb.position.set(.1+d,.03+d*.02,.3);posts.add(lb)});
+const apLabel=labelSprite('AEROPUERTO DEMO · RWY 09/27',{w:560,h:64,fs:28,sx:6,sy:.69});apLabel.position.set(0,.75,0);scene.add(apLabel);
+const apPole=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,.02,0),new THREE.Vector3(0,.7,0)]),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.5,fog:false}));scene.add(apPole);
+
+/* ---- anillos de nivel, nivel 0 °C ---- */
+const lvGroup=new THREE.Group();scene.add(lvGroup);
+[[6500,'6 500 ft · bajas|medias',1],[20000,'20 000 ft · medias|altas',1],[10000,'10 000 ft',0],[30000,'30 000 ft',0],[40000,'40 000 ft',0]].forEach(a=>{
+  const y=a[0]*FT,pts=[];for(let i=0;i<=96;i++){const t=i/96*Math.PI*2;pts.push(new THREE.Vector3(Math.cos(t)*22,y,Math.sin(t)*22))}
+  lvGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:a[2]?0x39c0ff:0x9fb2c4,transparent:true,opacity:a[2]?.75:.4,fog:false})));
+  [0,Math.PI].forEach(t=>{const s=labelSprite(a[1],{w:360,h:60,fs:27,sx:4.2,sy:.7,col:a[2]?'#8fdcff':'#dbe6ef'});s.position.set(Math.cos(t)*22,y,Math.sin(t)*22);if(!t)lvGroup.add(s)})});
+lvGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,13.5,0)]),new THREE.LineBasicMaterial({color:0x9fb2c4,transparent:true,opacity:.35,fog:false})));
+const fzGroup=new THREE.Group();scene.add(fzGroup);
+const fzDisc=new THREE.Mesh(new THREE.CircleGeometry(40,64).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x7fd1ff,transparent:true,opacity:.14,side:THREE.DoubleSide,depthWrite:false,fog:false}));
+const fzLabel=labelSprite('0 °C',{w:300,h:60,fs:28,sx:4.4,sy:.88,col:'#bfeaff'});fzLabel.position.set(0,0,22);
+fzGroup.add(fzDisc,fzLabel);
+
+/* ---- niebla baja (vista orbital) ---- */
+const fogPlates=new THREE.Group();scene.add(fogPlates);
+for(let i=0;i<6;i++){const m=new THREE.Mesh(new THREE.CircleGeometry(45,40).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xdfe6ec,transparent:true,opacity:0,depthWrite:false,fog:false}));m.position.y=.015+i*.03;fogPlates.add(m)}
+
+/* ---- flechas de viento en superficie ---- */
+const windGroup=new THREE.Group();scene.add(windGroup);
+function buildWind(){while(windGroup.children.length){const c=windGroup.children.pop();c.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose()})}
+  if(S.wspd<=0)return;const d=new THREE.Vector3(-Math.sin(S.wdir*RAD),0,Math.cos(S.wdir*RAD));const len=.9+S.wspd*.09;
+  for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){const o=new THREE.Vector3(i*6-d.x*len/2,.45,j*6-d.z*len/2);
+    const a=new THREE.ArrowHelper(d,o,len,0x39c0ff,len*.28,len*.16);a.line.material.fog=false;a.cone.material.fog=false;windGroup.add(a)}}
+
+/* ========= nubes ========= */
+const PUFF=(function(){const g=new THREE.SphereGeometry(1,16,12),p=g.attributes.position,v=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i);const n=1+.16*Math.sin(v.x*5.1+v.y*3.7)*Math.cos(v.z*4.3+v.x*2.1)+.07*Math.sin(v.y*9+v.z*7);v.multiplyScalar(n);p.setXYZ(i,v.x,v.y,v.z)}
+  g.computeVertexNormals();return g})();
+const cloudMats={};
+function cloudMat(t){const o=TYPES[t].op;return cloudMats[t]||(cloudMats[t]=new THREE.MeshLambertMaterial({color:0xffffff,transparent:o<1,opacity:o,depthWrite:o>=1}))}
+const P=(x,y,z,sx,sy,sz,ry,tn)=>[x,Math.max(y,sy),z,sx,sy,sz,ry,tn];
+function sheet(fp,T,rnd,n,t0,t1,lump){const a=[];for(let i=0;i<n;i++){const ang=rnd()*6.283,d=Math.sqrt(rnd())*fp*.45,sy=T*.5*(.8+rnd()*.4);
+  a.push(P(Math.cos(ang)*d,sy,Math.sin(ang)*d,fp*(.5+rnd()*.3),sy,fp*(.5+rnd()*.3),rnd()*6,t0+(t1-t0)*rnd()));
+  for(let k=0;k<(lump||0);k++){const aa=rnd()*6.283,dd=Math.sqrt(rnd())*fp*.5,s=.45+rnd()*.4;a.push(P(Math.cos(aa)*dd+Math.cos(ang)*d*.5,T*.5+sy*.5,Math.sin(aa)*dd+Math.sin(ang)*d*.5,s,s*.55,s,rnd()*6,t1))}}return a}
+function patch(fp,rnd,cols,rows,sp,s,fl,t0,t1){const a=[];for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){if(rnd()<.2)continue;
+  const x=(j-(cols-1)/2)*fp*sp+(rnd()-.5)*fp*.06,z=(i-(rows-1)/2)*fp*sp+(rnd()-.5)*fp*.06,q=fp*s*(.7+rnd()*.6);a.push(P(x,q*fl,z,q,q*fl,q*.8,.4+rnd()*.2,t0+(t1-t0)*rnd()))}return a}
+function towerCloud(fp,T,rnd,anvil){const a=[],r=fp*.3,n=anvil?44:26;
+  for(let i=0;i<n;i++){const t=i/(n-1),y=t*T*.85,w=r*(.7+.5*Math.sin(t*3)+.15*rnd())*(anvil?1:.8)*(1-.35*t*t);
+    const ox=(rnd()-.5)*r*.8*(1-t*.5),oz=(rnd()-.5)*r*.8*(1-t*.5);
+    a.push(P(ox,y,oz,w,w*.9,w,rnd()*6,anvil?clamp(.12+t*.9,0,1):clamp(.3+t*.7,0,1)));
+    if(rnd()<.8){const ang=rnd()*6.283;a.push(P(ox+Math.cos(ang)*w*.7,y+w*.2,oz+Math.sin(ang)*w*.7,w*.6,w*.55,w*.6,rnd()*6,clamp(.25+t*.75,0,1)))}}
+  if(anvil)for(let k=0;k<24;k++){const ang=rnd()*6.283,d=Math.sqrt(rnd())*r*1.9;
+    a.push([Math.cos(ang)*d*.9,T*.92+(rnd()-.5)*.3,Math.sin(ang)*d*.9,r*(.45+rnd()*.5),.25+rnd()*.2,r*(.45+rnd()*.5),rnd()*6,.95])}
+  return a}
+const GEN={
+ Ci:(fp,T,rnd)=>{const a=[],b=rnd()*3.14;for(let i=0;i<5;i++){const L=fp*(.7+rnd()*.6),ox=(rnd()-.5)*fp*.9,oz=(rnd()-.5)*fp*.9,an=b+(rnd()-.5)*.35;
+   a.push([ox,rnd()*.15,oz,L,.035,L*.07,an,.9+rnd()*.1]);a.push([ox+Math.cos(an)*L*.9,.05,oz-Math.sin(an)*L*.9,L*.1,.03,L*.03,an+.5,1])}return a},
+ Cc:(fp,T,rnd)=>patch(fp,rnd,6,4,.2,.06,.4,.7,1),
+ Cs:(fp,T,rnd)=>sheet(fp*1.1,.25,rnd,5,.85,1,0),
+ Ac:(fp,T,rnd)=>patch(fp,rnd,5,3,.38,.12,.4,.55,.95),
+ As:(fp,T,rnd)=>sheet(fp,.6,rnd,6,.55,.7,0),
+ Sc:(fp,T,rnd)=>sheet(fp,T*.5,rnd,3,.5,.8,7),
+ St:(fp,T,rnd)=>sheet(fp,T,rnd,6,.45,.7,0),
+ Ns:(fp,T,rnd)=>{const a=sheet(fp,1.6,rnd,8,.2,.4,0);for(let k=0;k<10;k++){const ang=rnd()*6.283,d=Math.sqrt(rnd())*fp*.45,s=.2+rnd()*.2;a.push([Math.cos(ang)*d,-.15-rnd()*.15,Math.sin(ang)*d,s*1.6,s*.6,s,rnd()*6,.2])}return a},
+ Cu:(fp,T,rnd,f)=>{const a=[],r=fp*(.3+.2*f);for(let i=0;i<12;i++){const ang=rnd()*6.283,d=Math.sqrt(rnd())*r,k=1-d/r,s=r*(.3+.32*k*(.6+.8*rnd()));
+   const y=s*.9+k*k*T*.8*(.7+.5*rnd());a.push(P(Math.cos(ang)*d,y,Math.sin(ang)*d,s,s*.9,s,rnd()*6,clamp(.25+y/(T+s),0,1)))}return a},
+ TCU:(fp,T,rnd)=>towerCloud(fp,T,rnd,false),
+ Cb:(fp,T,rnd)=>towerCloud(fp,T,rnd,true)
+};
+const LAY=[0,1,2].map(()=>({root:new THREE.Group(),clouds:[],cbs:[]}));
+LAY.forEach(o=>scene.add(o.root));
+function clearLayer(o){o.clouds.forEach(g=>{g.children.forEach(m=>{m.dispose&&m.dispose()});o.root.remove(g)});o.clouds=[];o.cbs=[]}
+const _m=new THREE.Matrix4(),_q=new THREE.Quaternion(),_e=new THREE.Euler(),_p=new THREE.Vector3(),_s=new THREE.Vector3(),_c=new THREE.Color(),_lo=new THREE.Color(),_hi=new THREE.Color();
+function buildLayer(i){const L=S.layers[i],o=LAY[i];clearLayer(o);o.root.visible=L.on&&L.okt>0;if(!o.root.visible)return;
+  const T=TYPES[L.type],f=L.okt/8,rnd=mulberry(1000+i*77+T.seed*13),cs=T.cell,nx=Math.floor(2*R/cs),cells=[];
+  for(let ix=0;ix<nx;ix++)for(let iz=0;iz<nx;iz++)cells.push({x:-R+(ix+.5)*cs+(rnd()-.5)*cs*.5,z:-R+(iz+.5)*cs+(rnd()-.5)*cs*.5,k:rnd(),s:rnd()*1e6});
+  cells.sort((a,b)=>a.k-b.k);const sh=T.kind==='sheet',p=sh?Math.min(1,f*1.5):f,cnt=Math.max(1,Math.round(cells.length*p));
+  const fp=sh?cs*.6*Math.sqrt(f/p):cs*.5,tk=T.add*FT;_lo.setHex(T.lo);_hi.setHex(T.hi);
+  for(let c=0;c<cnt;c++){const cell=cells[c],pr=mulberry(cell.s|0),pf=GEN[L.type](fp,tk,pr,f),mesh=new THREE.InstancedMesh(PUFF,cloudMat(L.type),pf.length);
+    for(let k=0;k<pf.length;k++){const q=pf[k];_e.set(0,q[6],0);_q.setFromEuler(_e);_p.set(q[0],q[1],q[2]);_s.set(q[3],q[4],q[5]);_m.compose(_p,_q,_s);mesh.setMatrixAt(k,_m);
+      _c.copy(_lo).lerp(_hi,q[7]);mesh.setColorAt(k,_c)}
+    mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.frustumCulled=false;
+    const g=new THREE.Group();g.position.set(cell.x,0,cell.z);g.add(mesh);o.root.add(g);o.clouds.push(g);if(L.type==='Cb')o.cbs.push(g)}
+  o.root.position.y=L.base*FT}
+
+/* ========= precipitación ========= */
+const PN=4200;let pMode='';
+const pPos=new Float32Array(PN*6),pLoc=new Float32Array(PN*3),pLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x9fc4e8,transparent:true,opacity:.6}));
+pLines.geometry.setAttribute('position',new THREE.BufferAttribute(pPos,3));pLines.frustumCulled=false;scene.add(pLines);
+const sPos=new Float32Array(PN*3),pPts=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({color:0xffffff,size:.05,transparent:true,opacity:.9,depthWrite:false}));
+pPts.geometry.setAttribute('position',new THREE.BufferAttribute(sPos,3));pPts.frustumCulled=false;scene.add(pPts);
+function reseedPrecip(rad,H){for(let i=0;i<PN;i++){const a=Math.random()*6.283,d=Math.sqrt(Math.random())*rad;pLoc[i*3]=Math.cos(a)*d;pLoc[i*3+1]=Math.random()*H;pLoc[i*3+2]=Math.sin(a)*d}}
+
+/* ========= relámpagos ========= */
+const boltGroup=new THREE.Group();scene.add(boltGroup);
+let flash=0,nextBolt=2,boltLife=0;
+function makeBolt(x0,y0,z0){while(boltGroup.children.length){const c=boltGroup.children.pop();c.geometry.dispose();c.material.dispose()}
+  const pts=[];let x=x0,z=z0;for(let i=0;i<=16;i++){pts.push(new THREE.Vector3(x,y0*(1-i/16),z));x+=(Math.random()-.5)*.4;z+=(Math.random()-.5)*.4}
+  [[0,0],[.03,0],[0,.03],[-.03,-.02]].forEach(of=>{const g=new THREE.BufferGeometry().setFromPoints(pts.map(v=>new THREE.Vector3(v.x+of[0],v.y,v.z+of[1])));
+    boltGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:0xeaf1ff,fog:false})))});boltLife=.2;flash=1}
+
+/* ========= cálculo meteorológico ========= */
+const fcat=(c,v)=>(c<500||v<1600)?'LIFR':(c<1000||v<4800)?'IFR':(c<=3000||v<8000)?'MVFR':'VFR';
+const CATTXT={VFR:'Vuelo visual',MVFR:'VFR marginal',IFR:'Vuelo por instrumentos',LIFR:'IFR bajo'};
+const wxVis=()=>{const w=WX[S.wx];if(!w.vis)return 9999;return HAS_INT(S.wx)?(w.vis[S.inten]??w.vis[''] ):w.vis['']};
+function ratio(a){return a}
+function calc(){
+  const wv=wxVis(),vis=Math.min(S.vis,wv);
+  const act=S.layers.map((l,i)=>Object.assign({i,t:TYPES[l.type]},l)).filter(l=>l.on&&l.okt>0).sort((a,b)=>a.base-b.base);
+  const cl=act.find(l=>l.okt>=5);let ceil=cl?cl.base:Infinity,vv=false;
+  if(!cl&&S.wx==='FG'&&vis<1000){ceil=100;vv=true}
+  const cat=fcat(ceil,vis);
+  const lim=(()=>{const cc=ceil<500?'LIFR':ceil<1000?'IFR':ceil<=3000?'MVFR':'VFR',vc=vis<1600?'LIFR':vis<4800?'IFR':vis<8000?'MVFR':'VFR';
+    const o={LIFR:0,IFR:1,MVFR:2,VFR:3};if(cat==='VFR')return'ninguno';return o[cc]<o[vc]?'techo':o[vc]<o[cc]?'visibilidad':'techo y visibilidad'})();
+  const spread=S.T-S.Td,H=Math.round(S.rwy*10),rel=(S.wdir-H)*RAD,head=S.wspd*Math.cos(rel),cross=S.wspd*Math.sin(rel);
+  const fl=S.T<=0?0:S.T/1.98*1000,fl20=(S.T+20)/1.98*1000;
+  const pa=ELEV+(1013.25-S.qnh)*27,isa=15-1.98*pa/1000,da=pa+120*(S.T-isa);
+  const rh=100*Math.exp(17.625*S.Td/(243.04+S.Td))/Math.exp(17.625*S.T/(243.04+S.T));
+  const gustOn=S.gust>=10&&S.wspd>0;
+  return {wv,vis,act,cl,ceil,vv,cat,lim,spread,H,head,cross,fl,fl20,pa,da,rh,gustOn,cb:act.some(l=>l.type==='Cb'),tcu:act.some(l=>l.type==='TCU'),ts:S.wx==='TSRA'||S.wx==='TSGR'};
+}
+function visTxt(v){return v>=9999?'10 km o más':v>=1000?(v/1000).toFixed(1).replace('.0','')+' km':Math.round(v)+' m'}
+function metar(D){
+  const q=n=>Math.round(n),t2=n=>(n<0?'M':'')+pad(Math.abs(q(n)),2);
+  let w;if(S.wspd===0)w='00000KT';else{const d=Math.round(S.wdir/10)*10;w=(S.wspd<=3?'VRB':pad(d===0?360:d,3))+pad(S.wspd,2)+(D.gustOn?'G'+pad(S.wspd+S.gust,2):'')+'KT'}
+  const wxc=(()=>{if(S.wx==='NONE')return'';const c=WX[S.wx].code;if(S.wx==='FG'&&D.vis>=1000)return'BR';return(HAS_INT(S.wx)?S.inten:'')+c})();
+  const lowCl=D.act.filter(l=>l.base<=5000||l.type==='Cb'||l.type==='TCU');
+  const cavok=D.vis>=9999&&!wxc&&lowCl.length===0&&!D.act.some(l=>l.base<5000);
+  const cg=lowCl.map(l=>COVER(l.okt)+pad(Math.round(l.base/100),3)+(l.type==='Cb'?'CB':l.type==='TCU'?'TCU':'')).join(' ');
+  let sky=D.vv?'VV001':cg;if(!sky)sky=S.layers.some(l=>l.on&&l.okt>0)?'NSC':'SKC';
+  const vis=D.vis>=9999?'9999':pad(D.vis<800?Math.round(D.vis/50)*50:D.vis<5000?Math.round(D.vis/100)*100:Math.round(D.vis/1000)*1000,4);
+  const parts=['XXXX','24'+pad(S.hour,2)+'00Z',w];
+  if(cavok)parts.push('CAVOK');else{parts.push(vis);if(wxc)parts.push(wxc);parts.push(sky)}
+  parts.push(t2(S.T)+'/'+t2(S.Td),'Q'+pad(S.qnh,4));return parts.join(' ')}
+
+/* ========= entorno visual ========= */
+const COL={dT:new THREE.Color(0x3b7fd0),dB:new THREE.Color(0xbfd9f0),nT:new THREE.Color(0x030713),nB:new THREE.Color(0x111a2b),tB:new THREE.Color(0xf2a272),
+  gT:new THREE.Color(0x6a7480),gB:new THREE.Color(0x9ba5af),kT:new THREE.Color(0x353c46),kB:new THREE.Color(0x626b76)};
+const CW={Ci:.1,Cc:.1,Cs:.3,Ac:.45,As:.8,Sc:.85,St:.95,Ns:1,Cu:.5,TCU:.7,Cb:.9},CD={Ci:0,Cc:0,Cs:.05,Ac:.15,As:.5,Sc:.4,St:.45,Ns:1,Cu:.05,TCU:.55,Cb:.95};
+let D=calc(),env={rainMul:0,flashBase:0};
+const ct=new THREE.Color(),cb=new THREE.Color();
+function applyEnv(){
+  D=calc();
+  const a=(S.hour-6)/12*Math.PI,el=Math.sin(a),day=smooth(-.06,.25,el),tw=smooth(-.35,0,el)*(1-smooth(0,.35,el));
+  let oc=1,dk=0;D.act.forEach(l=>{const f=l.okt/8;oc*=1-CW[l.type]*f;dk=Math.max(dk,CD[l.type]*f)});oc=1-oc;
+  if(S.wx!=='NONE'&&S.wx!=='HZ'&&S.wx!=='BR')dk=Math.max(dk,.25);
+  ct.copy(COL.gT).lerp(COL.kT,dk);cb.copy(COL.gB).lerp(COL.kB,dk);
+  const top=skyU.top.value.copy(COL.dT).lerp(ct,oc),bot=skyU.bot.value.copy(COL.dB).lerp(cb,oc);
+  bot.lerp(COL.tB,tw*.75*(1-oc*.7));
+  top.lerp(COL.nT,1-day);bot.lerp(COL.nB,1-day);
+  const hz=smooth(0,1,1-D.vis/9999)*.0;ct.setHex(0xc8cfd6);if(D.vis<5000){bot.lerp(ct,smooth(5000,800,D.vis)*.55*day+.1*(1-day))}
+  scene.fog.color.copy(bot);
+  const dist=D.vis/1000*(S.view==='tower'?lerp(1,5.5,smooth(1,10,D.vis/1000)):25);
+  scene.fog.density=1.98/clamp(S.view==='tower'?dist:Math.max(dist,40),.25,400);
+  sun.position.set(Math.cos(a)*100,Math.max(Math.sin(a),.02)*100,30);
+  sun.intensity=1.2*day*(1-.78*oc);sun.color.setHex(tw>.3?0xffc890:0xfff2dd);
+  env.hemi=.2+.7*day*(1-.35*oc);hemi.intensity=env.hemi;
+  hemi.color.copy(bot).lerp(new THREE.Color(0xffffff),.35);hemi.groundColor.setHex(0x8a949c);
+  const gm=smooth(.25,.9,Math.max(0,el));
+  fogPlates.children.forEach((m,i)=>{m.material.opacity=S.view==='orbit'?clamp((1-D.vis/5000),0,1)*.16*(D.vis<1500?1:.4):0;m.material.color.copy(bot)});
+  fzGroup.visible=S.showFz;fzGroup.position.y=D.fl*FT;fzLabel.position.set(0,0,22);
+  fzDisc.material.opacity=S.T<=0?.0:.14;setLabel(fzLabel,S.T<=0?'0 °C · en superficie':'0 °C · '+fmt(D.fl)+' ft');
+  lvGroup.visible=S.showLv;windGroup.visible=S.showWind&&S.view==='orbit';
+  rwy.rotation.y=(90-D.H)*RAD;
+  rwLights.material.opacity=1;rwLights.visible=day<.7||D.vis<5000;
+  const m=metar(D);$('#metarHud').textContent=m;$('#metarBig').textContent=m;
+  const pill=$('#catpill');pill.style.background='var(--'+D.cat.toLowerCase()+')';pill.style.color='var(--catink)';pill.innerHTML=D.cat+'<small>'+CATTXT[D.cat]+'</small>';
+  apLabel.visible=apPole.visible=S.view==='orbit';posts.visible=S.view==='tower';
+  posts.children.forEach(c=>{if(c.isSprite){const d=c.position.x-.1;c.material.opacity=clamp(Math.exp(-3.912*d/(D.vis/1000))*1.2,0,1)}else{c.material.color.setHex(0xff7a1a).lerp(new THREE.Color(0xbfc6cc),clamp(1-Math.exp(-3.912*(c.position.x-.1)/(D.vis/1000)),0,1))}});
+  setLabel(apLabel,'AEROPUERTO DEMO · RWY '+pad(D.H/10,2)+'/'+pad(rwyB(D.H/10),2));
+  setPrecip();refreshTraffic();
+}
+const isoDim=0;
+/* ========= precipitación ========= */
+let pk={type:'',n:0,rad:20,H:3,len:.3,sp:2.5,seed:0};
+function precipLevel(){const k=S.wx;if(!WX[k].p)return 0;return{'-':.3,'':.6,'+':1}[HAS_INT(k)?S.inten:'']??.6}
+function setPrecip(){
+  const type=WX[S.wx].p||'',lv=precipLevel(),tw=S.view==='tower',lowB=D.act.filter(l=>l.okt>=3).map(l=>l.base*FT)[0];
+  const H=tw?Math.min(lowB??.6,.6):(lowB??1.5);
+  const n=Math.round(PN*(type==='hail'?.35:lv));
+  const cfg={type,n,rad:tw?.3:20,H:Math.max(.05,H),len:tw?(type==='rain'?.022:.0):(type==='rain'?.4:0),sp:tw?(type==='rain'?.45:type==='snow'?.05:.5):(type==='rain'?3:type==='snow'?.5:3.5)};
+  const changed=cfg.type!==pk.type||cfg.rad!==pk.rad||Math.abs(cfg.H-pk.H)>.02;pk=Object.assign({seed:pk.seed},cfg);
+  if(changed)reseedPrecip(pk.rad,pk.H);
+  pLines.visible=type==='rain'&&n>0;pPts.visible=(type==='snow'||type==='hail')&&n>0;
+  pLines.geometry.setDrawRange(0,n*2);pPts.geometry.setDrawRange(0,n);
+  pPts.material.size=tw?(type==='hail'?.012:.008):(type==='hail'?.12:.07);pPts.material.color.setHex(type==='hail'?0xe6f4ff:0xffffff);
+  pLines.material.opacity=S.wx==='DZ'?.35:.6;
+}
+function stepPrecip(dt,cx,cz){
+  if(!(pLines.visible||pPts.visible))return;
+  const d=new THREE.Vector3(-Math.sin(S.wdir*RAD),0,Math.cos(S.wdir*RAD)),drift=S.wspd*.5144*(S.view==='tower'?.0006:.05)*(pk.type==='snow'?1:.6),
+    sp=pk.sp*(pk.type==='snow'?1:1),H=pk.H,n=pk.n;
+  for(let i=0;i<n;i++){let y=pLoc[i*3+1]-sp*dt*(pk.type==='snow'?.9+.4*Math.sin(i):1);
+    let x=pLoc[i*3]+d.x*drift*dt,z=pLoc[i*3+2]+d.z*drift*dt;
+    if(pk.type==='snow'){x+=Math.sin(performance.now()/700+i)*dt*(S.view==='tower'?.01:.2);}
+    if(y<0){y+=H;const a=Math.random()*6.283,r=Math.sqrt(Math.random())*pk.rad;x=Math.cos(a)*r;z=Math.sin(a)*r}
+    pLoc[i*3]=x;pLoc[i*3+1]=y;pLoc[i*3+2]=z;
+    const X=x+cx,Z=z+cz;
+    if(pk.type==='rain'){const o=i*6,l=pk.len;pPos[o]=X;pPos[o+1]=y;pPos[o+2]=Z;pPos[o+3]=X-d.x*l*.15;pPos[o+4]=y+l;pPos[o+5]=Z-d.z*l*.15}
+    else{sPos[i*3]=X;sPos[i*3+1]=y;sPos[i*3+2]=Z}}
+  if(pk.type==='rain')pLines.geometry.attributes.position.needsUpdate=true;else pPts.geometry.attributes.position.needsUpdate=true;
+}
+
+/* ========= cámara ========= */
+const cam={theta:.7,phi:1.18,dist:64,tx:0,ty:3.5,tz:0,yaw:0,pitch:.14,fov:50};
+function resetCam(){if(S.view==='orbit'){Object.assign(cam,{theta:.7,phi:1.18,dist:64,tx:0,ty:3.5,tz:0});camera.fov=50}
+  else{cam.yaw=(D.H+(dirL>0?180:0))*RAD;cam.pitch=.14;camera.fov=65}camera.updateProjectionMatrix()}
+function updateCam(){
+  if(S.view==='orbit'){const sp=Math.sin(cam.phi);camera.position.set(cam.tx+cam.dist*sp*Math.sin(cam.theta),cam.ty+cam.dist*Math.cos(cam.phi),cam.tz+cam.dist*sp*Math.cos(cam.theta));camera.lookAt(cam.tx,cam.ty,cam.tz)}
+  else{const p=new THREE.Vector3(.1,.049,.17);rwy.updateMatrixWorld(true);rwy.localToWorld(p);camera.position.copy(p);
+    const cp=Math.cos(cam.pitch);camera.lookAt(p.x+Math.sin(cam.yaw)*cp,p.y+Math.sin(cam.pitch),p.z-Math.cos(cam.yaw)*cp)}
+}
+const ptrs=new Map();let lastPinch=0,lastMid=null;
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,b:e.button,s:e.shiftKey});const h=$('#dragHint');if(h)h.style.opacity=0});
+canvas.addEventListener('pointerup',e=>{ptrs.delete(e.pointerId);lastPinch=0;lastMid=null});
+canvas.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);lastPinch=0;lastMid=null});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+function pan(dx,dy){const r=new THREE.Vector3(),u=new THREE.Vector3();camera.matrixWorld.extractBasis(r,u,new THREE.Vector3());const k=cam.dist*.0016;
+  cam.tx-=r.x*dx*k-u.x*dy*k*0;cam.tz-=r.z*dx*k;cam.ty=clamp(cam.ty+dy*k,0,16)}
+canvas.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y),mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+    if(lastPinch){const f=lastPinch/d;if(S.view==='orbit')cam.dist=clamp(cam.dist*f,4,120);else{camera.fov=clamp(camera.fov*f,28,95);camera.updateProjectionMatrix()}}
+    if(lastMid&&S.view==='orbit')pan(mid.x-lastMid.x,mid.y-lastMid.y);lastPinch=d;lastMid=mid;return}
+  if(S.view==='orbit'){if(p.b===2||p.s)pan(dx,dy);else{cam.theta-=dx*.006;cam.phi=clamp(cam.phi-dy*.006,.12,1.53)}}
+  else{cam.yaw+=dx*.004*(camera.fov/65);cam.pitch=clamp(cam.pitch+dy*.004*(camera.fov/65),-.12,1.45)}});
+canvas.addEventListener('wheel',e=>{e.preventDefault();const f=Math.exp(e.deltaY*.0012);
+  if(S.view==='orbit')cam.dist=clamp(cam.dist*f,4,120);else{camera.fov=clamp(camera.fov*f,28,95);camera.updateProjectionMatrix()}},{passive:false});
+canvas.addEventListener('keydown',e=>{});
+function setView(v){S.view=v;$('#vOrbit').setAttribute('aria-pressed',v==='orbit');$('#vTower').setAttribute('aria-pressed',v==='tower');resetCam();applyEnv();rebuildHints()}
+$('#vOrbit').onclick=()=>setView('orbit');$('#vTower').onclick=()=>setView('tower');$('#vReset').onclick=()=>resetCam();
+[['tgLv','showLv'],['tgFz','showFz'],['tgWd','showWind'],['tgTr','showTr']].forEach(([id,k])=>{const b=$('#'+id);b.onclick=()=>{S[k]=!S[k];b.setAttribute('aria-pressed',S[k]);applyEnv()}});
+function rebuildHints(){const h=$('#dragHint');if(h){h.textContent=S.view==='orbit'?'Arrastra para girar · rueda o pellizco para acercar · Mayús+arrastrar para desplazar':'Arrastra para mirar alrededor · rueda para el zoom';h.style.opacity=.8}}
+
+/* ========= bucle ========= */
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let tPrev=performance.now(),tAcc=0;
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-tPrev)/1000);tPrev=now;tAcc+=dt;
+  // nubes: derivan con el viento (más rápido con la altura)
+  const d=new THREE.Vector3(-Math.sin(S.wdir*RAD),0,Math.cos(S.wdir*RAD));
+  if(!reduce)LAY.forEach((o,i)=>{if(!o.root.visible)return;const k=S.wspd*.0075*(1+S.layers[i].base/15000)*dt;
+    o.clouds.forEach(g=>{g.position.x+=d.x*k;g.position.z+=d.z*k;if(g.position.x>R)g.position.x-=2*R;if(g.position.x<-R)g.position.x+=2*R;if(g.position.z>R)g.position.z-=2*R;if(g.position.z<-R)g.position.z+=2*R})});
+  // manga de viento
+  const sw=S.wspd,gust=D.gustOn?S.gust:0;
+  sockPivot.rotation.set(0,(D.H-S.wdir-180)*RAD+Math.sin(tAcc*(2+sw*.15))*.04*Math.min(1,sw/10)*(1+gust*.05),-(1-smooth(0,14,sw))*1.35+Math.sin(tAcc*9)*.06*(sw>2?1:0)*(1+gust*.05),'XYZ');
+  windGroup.children.forEach((a,i)=>{const s=1+.06*Math.sin(tAcc*2+i)*(1+gust*.04);a.scale.setScalar(s)});
+  // relámpagos
+  if(D.ts&&!reduce){nextBolt-=dt;if(nextBolt<=0){nextBolt=1.2+Math.random()*3.2;const cb=LAY.flatMap((o,i)=>S.layers[i].type==='Cb'&&S.layers[i].on?o.cbs.map(g=>({g,i})):[]);
+      let x,z,y0=2.2;if(cb.length){const c=cb[Math.floor(Math.random()*cb.length)];y0=S.layers[c.i].base*FT;x=c.g.position.x+(Math.random()-.5)*2;z=c.g.position.z+(Math.random()-.5)*2}else{x=(Math.random()-.5)*14;z=(Math.random()-.5)*14}
+      if(S.view==='tower'){const an=Math.random()*6.283,r=2+Math.random()*5;x=Math.cos(an)*r;z=Math.sin(an)*r}
+      makeBolt(x,y0,z)}}
+  if(boltLife>0){boltLife-=dt;flash=Math.max(0,boltLife*5);if(boltLife<=0)while(boltGroup.children.length){const c=boltGroup.children.pop();c.geometry.dispose();c.material.dispose()}}
+  hemi.intensity=env.hemi+flash*.9;
+  stepTraffic(dt);
+  updateCam();
+  stepPrecip(dt,S.view==='tower'?camera.position.x:0,S.view==='tower'?camera.position.z:0);
+  sky.position.copy(camera.position);
+  renderer.render(scene,camera);
+}
+function resize(){const r=canvas.getBoundingClientRect(),w=Math.max(10,r.width),h=Math.max(10,r.height);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+new ResizeObserver(resize).observe(canvas);
+
+/* ========= interfaz ========= */
+const syncs=[];let dirty=new Set(),qd=false;
+function queueLayer(i){dirty.add(i);if(!qd){qd=true;requestAnimationFrame(()=>{qd=false;dirty.forEach(buildLayer);dirty.clear()})}}
+function changed(o){o=o||{};if(o.layer!=null)queueLayer(o.layer);if(o.wind)buildWind();applyEnv();syncUI();}
+function mkSlider(parent,c){const w=document.createElement('div');w.className='fld';
+  w.innerHTML='<div class="top2"><label for="'+c.id+'">'+c.label+'</label><output id="'+c.id+'o"></output></div><input type="range" id="'+c.id+'">'+(c.sub?'<div class="sub" id="'+c.id+'s"></div>':'');
+  parent.append(w);const inp=w.querySelector('input'),o=w.querySelector('output'),sb=w.querySelector('.sub'),val=v=>typeof v==='function'?v():v;
+  const sync=()=>{inp.min=val(c.min);inp.max=val(c.max);inp.step=c.step;inp.value=c.get();o.textContent=c.out(+inp.value);if(sb&&c.sub)sb.textContent=c.sub()};
+  inp.addEventListener('input',()=>{c.set(+inp.value);changed(c.ch?c.ch():{})});syncs.push(sync);sync();return w}
+function mkChip(parent,txt,cls){const b=document.createElement('button');b.className='chip '+(cls||'');b.textContent=txt;parent.append(b);return b}
+
+/* -- capas -- */
+const lt=$('#layerTabs');
+S.layers.forEach((L,i)=>{const b=document.createElement('button');b.className='lt';b.style.setProperty('--lc',LAYCOL[i]);b.innerHTML='<i></i><span><b>Capa '+(i+1)+'</b><small></small></span>';
+  b.onclick=()=>{S.sel=i;buildCloudUI();syncUI()};lt.append(b)});
+$('#layerOn').onchange=e=>{const L=S.layers[S.sel];L.on=e.target.checked;if(L.on&&L.okt===0)L.okt=3;changed({layer:S.sel})};
+const typesEl=$('#types');
+TKEYS.forEach(k=>{const t=TYPES[k],b=document.createElement('button');b.className='type';b.style.setProperty('--lv','var('+LVL[t.lvl]+')');b.dataset.k=k;
+  b.innerHTML='<b>'+(k==='TCU'?'TCU':k)+'</b><span>'+t.n+'</span>';
+  b.onclick=()=>{const L=S.layers[S.sel];L.type=k;if(L.base<t.min||L.base>t.max)L.base=t.def;if(!L.on){L.on=true}if(L.okt===0)L.okt=3;buildCloudUI();changed({layer:S.sel})};typesEl.append(b)});
+function buildCloudUI(){const el=$('#cloudCtl');el.innerHTML='';const L=()=>S.layers[S.sel],T=()=>TYPES[L().type];
+  mkSlider(el,{id:'sOkt',label:'Cobertura',min:0,max:8,step:1,get:()=>L().okt,set:v=>{L().okt=v;if(v===0)L().on=false;else L().on=true},ch:()=>({layer:S.sel}),
+    out:v=>v+'/8 · '+COVER(v),sub:()=>'Octas de cielo cubierto: FEW 1–2, SCT 3–4, BKN 5–7, OVC 8.'});
+  mkSlider(el,{id:'sBase',label:'Base (sobre el aeródromo)',min:()=>T().min,max:()=>T().max,step:100,get:()=>L().base,set:v=>{L().base=v},ch:()=>({layer:S.sel}),
+    out:v=>fmt(v)+' ft',sub:()=>{const t=T(),top=L().base+t.add;return 'Rango típico de '+t.n+': '+fmt(t.min)+'–'+fmt(t.max)+' ft. Tope aprox. '+fmt(top)+' ft'+(top>=18000?' (FL'+pad(Math.round(top/100),3)+')':'')+'.'}});
+  const cv=document.createElement('div');cv.className='row';cv.innerHTML='<button class="chip sm" id="bConv"></button>';el.append(cv);
+  $('#bConv').onclick=()=>{const L=S.layers[S.sel],t=TYPES[L.type];L.base=clamp(Math.round(Math.max(0,S.T-S.Td)*400/100)*100,t.min,t.max);buildCloudUI();changed({layer:S.sel})};syncUI()}
+function renderTypeCard(){const L=S.layers[S.sel],t=TYPES[L.type],lvn={alta:'Nube alta',media:'Nube media',baja:'Nube baja',vert:'Desarrollo vertical'}[t.lvl];
+  $('#typeCard').innerHTML='<h3>'+t.n+' <small>'+L.type+(L.type==='Cb'?' · CB en METAR':L.type==='TCU'?' · TCU en METAR':'')+'</small></h3><div><span class="tag" style="--lv:var('+LVL[t.lvl]+')">'+lvn+'</span></div>'+
+  '<dl class="kv"><dt>Aspecto</dt><dd>'+t.look+'</dd><dt>Altura típica</dt><dd>'+fmt(t.min)+'–'+fmt(t.max)+' ft (base)</dd><dt>Precipitación</dt><dd>'+t.prec+'</dd><dt>Peligros</dt><dd>'+t.haz+'</dd><dt>Para el ATC</dt><dd>'+t.atc+'</dd></dl>'}
+function renderAlt(){const bar=$('#altbar');bar.innerHTML='';const Y=ft=>Math.sqrt(clamp(ft,0,45000)/45000)*100;
+  [0,2000,6500,10000,20000,30000,40000].forEach(ft=>{const e=document.createElement('div');e.className='tick';e.style.bottom=Y(ft)+'%';e.innerHTML='<span>'+(ft?ft/1000+'k':'0')+'</span>';bar.append(e)});
+  S.layers.forEach((L,i)=>{if(!L.on||L.okt===0)return;const t=TYPES[L.type],s=document.createElement('div');s.className='seg';s.style.setProperty('--lc',LAYCOL[i]);s.style.bottom=Y(L.base)+'%';s.style.height=Math.max(.8,Y(Math.min(45000,L.base+t.add))-Y(L.base))+'%';s.style.left=(8+i*15)+'px';bar.append(s)});
+  if(S.T>0){const z=document.createElement('div');z.className='fz';z.style.bottom=Y(D.fl)+'%';bar.append(z)}
+  const nt=$('#altnotes');nt.innerHTML='';D.act.forEach(l=>{const d=document.createElement('div');d.innerHTML='<b style="color:'+LAYCOL[l.i]+'">■</b> <b>'+l.type+'</b> '+l.okt+'/8 · base '+fmt(l.base)+' ft';nt.append(d)});
+  if(!D.act.length)nt.innerHTML='<div>Sin nubes activas.</div>';const z=document.createElement('div');z.innerHTML='<b style="color:var(--blue)">━</b> Nivel 0 °C: <b>'+(S.T<=0?'en superficie':fmt(D.fl)+' ft')+'</b>';nt.append(z)}
+
+/* -- fenómenos y atmósfera -- */
+const wxc=$('#wxChips'),inc=$('#intenChips');
+WXK.forEach(k=>{const b=mkChip(wxc,WX[k].n);b.dataset.k=k;b.onclick=()=>{S.wx=k;if(HAS_INT(k)&&!S.inten&&k!=='TSRA'&&k!=='TSGR')S.inten='';if(k==='NONE')S.inten='';
+  if(k==='TSRA'||k==='TSGR'){const ex=S.layers.findIndex(l=>l.on&&l.type==='Cb');if(ex<0){const L=S.layers[0];L.type='Cb';L.base=2500;L.okt=Math.max(L.okt,4);L.on=true;S.sel=0;buildCloudUI();changed({layer:0});return}}changed()}});
+['-','','+'].forEach(k=>{const b=mkChip(inc,INTN[k],'sm');b.dataset.k=k;b.onclick=()=>{S.inten=k;changed()}});
+const atm=$('#atmCtl');
+mkSlider(atm,{id:'sT',label:'Temperatura',min:-25,max:42,step:1,get:()=>S.T,set:v=>{S.T=v;if(S.Td>v)S.Td=v},out:v=>v+' °C',sub:()=>'Gradiente estándar: −2 °C cada 1 000 ft.'});
+mkSlider(atm,{id:'sTd',label:'Punto de rocío',min:-30,max:()=>S.T,step:1,get:()=>S.Td,set:v=>{S.Td=v},out:v=>v+' °C',sub:()=>'T − Td = '+(S.T-S.Td)+' °C · Humedad relativa '+Math.round(D.rh)+' %. Cerca de 0 °C hay niebla o estratos.'});
+mkSlider(atm,{id:'sQ',label:'QNH',min:960,max:1050,step:1,get:()=>S.qnh,set:v=>{S.qnh=v},out:v=>v+' hPa',sub:()=>'Presión al nivel medio del mar: '+(S.qnh*.02953).toFixed(2)+' inHg.'});
+mkSlider(atm,{id:'sV',label:'Visibilidad base',min:100,max:9999,step:100,get:()=>S.vis,set:v=>{S.vis=v},out:v=>v>=9999?'≥ 10 km':visTxt(v),sub:()=>'Visibilidad efectiva con el fenómeno actual: '+visTxt(D.vis)+'.'});
+mkSlider(atm,{id:'sH',label:'Hora (UTC)',min:0,max:23,step:1,get:()=>S.hour,set:v=>{S.hour=v},out:v=>pad(v,2)+':00',sub:()=>'Cambia la posición del sol y la luz del cielo.'});
+/* -- viento -- */
+const wc=$('#windCtl');
+mkSlider(wc,{id:'wD',label:'Dirección (desde)',min:0,max:360,step:5,get:()=>S.wdir,set:v=>{S.wdir=v},ch:()=>({wind:1}),out:v=>pad(v===0?360:v,3)+'°',sub:()=>'Rumbo de donde sopla el viento, referido al norte verdadero.'});
+mkSlider(wc,{id:'wS',label:'Velocidad media',min:0,max:60,step:1,get:()=>S.wspd,set:v=>{S.wspd=v},ch:()=>({wind:1}),out:v=>v+' kt',sub:()=>'1 kt ≈ '+(S.wspd*.5144).toFixed(1)+' m/s ≈ '+(S.wspd*1.852).toFixed(0)+' km/h.'});
+mkSlider(wc,{id:'wG',label:'Ráfagas sobre la media',min:0,max:30,step:1,get:()=>S.gust,set:v=>{S.gust=v},out:v=>v?'+'+v+' kt':'sin ráfagas',sub:()=>S.gust>0&&S.gust<10?'Se informa ráfaga (G) en el METAR solo si supera la media en 10 kt o más.':'Con ráfaga: METAR '+(S.gust>=10?'incluye':'no incluye')+' el grupo G.'});
+mkSlider(wc,{id:'wR',label:'Pista (rumbo magnético ÷ 10)',min:1,max:36,step:1,get:()=>S.rwy,set:v=>{S.rwy=v;drawRunway();if(S.view==='tower')cam.yaw=v*10*RAD},out:v=>'RWY '+pad(v,2)+'/'+pad(rwyB(v),2),sub:()=>'Rumbo de la pista: '+pad(D.H,3)+'° / '+pad((D.H+180)%360,3)+'°.'});
+
+/* -- presets -- */
+const PRESETS=[
+ {n:'Cielo despejado',d:'CAVOK, brisa suave',s:{layers:[[0,'Cu',0,3500],[0,'Ac',0,12000],[0,'Ci',0,30000]],wx:'NONE',vis:9999,T:28,Td:16,qnh:1014,wdir:70,wspd:8,gust:0,hour:11}},
+ {n:'Cúmulos de buen tiempo',d:'Cu SCT, térmicas',s:{layers:[[1,'Cu',3,4800],[0,'Ac',0,12000],[1,'Ci',2,32000]],wx:'NONE',vis:9999,T:30,Td:18,qnh:1012,wdir:90,wspd:10,gust:0,hour:14}},
+ {n:'Frente cálido',d:'Cs, As y Ns con lluvia',s:{layers:[[1,'Ns',8,1200],[1,'As',8,9000],[1,'Cs',8,24000]],wx:'RA',inten:'',vis:5000,T:14,Td:13,qnh:1004,wdir:160,wspd:14,gust:0,hour:9}},
+ {n:'Tormenta tropical',d:'Cb, TSRA y ráfagas',s:{layers:[[1,'Cb',5,2500],[1,'Cu',3,2000],[1,'Cs',4,26000]],wx:'TSRA',inten:'',vis:4000,T:29,Td:25,qnh:1008,wdir:270,wspd:12,gust:14,hour:16}},
+ {n:'Niebla de madrugada',d:'FG, LIFR, aire en calma',s:{layers:[[1,'St',8,100],[0,'Ac',0,12000],[0,'Ci',0,30000]],wx:'FG',vis:300,T:9,Td:9,qnh:1020,wdir:0,wspd:0,gust:0,hour:5}},
+ {n:'Estratos bajos',d:'St OVC, llovizna, IFR',s:{layers:[[1,'St',8,600],[1,'As',8,11000],[0,'Ci',0,30000]],wx:'DZ',inten:'',vis:4000,T:12,Td:11,qnh:1010,wdir:200,wspd:9,gust:0,hour:8}},
+ {n:'Nevada invernal',d:'Ns, SN, T bajo cero',s:{layers:[[1,'Ns',8,1500],[1,'As',8,10000],[0,'Ci',0,30000]],wx:'SN',inten:'',vis:1500,T:-2,Td:-3,qnh:998,wdir:320,wspd:15,gust:10,hour:10}},
+ {n:'Viento cruzado',d:'Chubasco, ráfagas, TCU',s:{layers:[[1,'TCU',5,2800],[1,'Sc',4,4500],[0,'Ci',0,30000]],wx:'SHRA',inten:'',vis:6000,T:24,Td:19,qnh:1009,wdir:180,wspd:22,gust:12,hour:15}}];
+function applyPreset(p,keep){const s=p.s;s.layers.forEach((a,i)=>Object.assign(S.layers[i],{on:!!a[0]&&a[2]>0,type:a[1],okt:a[2],base:a[3]}));
+  Object.assign(S,{wx:s.wx,inten:s.inten||'',vis:s.vis,T:s.T,Td:s.Td,qnh:s.qnh,wdir:s.wdir,wspd:s.wspd,gust:s.gust,hour:s.hour});
+  if(!keep){S.rwy=9;}S.sel=0;drawRunway();buildWind();for(let i=0;i<3;i++)buildLayer(i);buildCloudUI();applyEnv();syncUI();renderTypeCard();setPrecipSeed()}
+function setPrecipSeed(){pk.type='';setPrecip()}
+const pr=$('#presets');PRESETS.forEach(p=>{const b=document.createElement('button');b.className='preset';b.innerHTML=p.n+'<small>'+p.d+'</small>';b.onclick=()=>applyPreset(p);pr.append(b)});
+
+/* -- datos -- */
+function renderMetrics(){const hd=Math.round(D.head),cr=Math.round(D.cross),ft=n=>fmt(n)+' ft';
+  const M=[['Techo',D.ceil===Infinity?'Sin techo':ft(D.ceil),D.vv?'Visibilidad vertical (VV)':'Capa BKN/OVC más baja'],
+   ['Visibilidad',visTxt(D.vis),D.vis<S.vis?'Reducida por '+WX[S.wx].n.toLowerCase():'Sin fenómeno limitante'],
+   ['Categoría',D.cat,'Limita: '+D.lim],
+   ['Base convectiva',ft(Math.max(0,D.spread)*400),'(T − Td) × 400 ft'],
+   ['Nivel 0 °C',S.T<=0?'En superficie':ft(D.fl),'Nivel −20 °C ≈ '+ft(D.fl20)],
+   ['Humedad relativa',Math.round(D.rh)+' %','T − Td = '+D.spread+' °C'],
+   ['Altitud de presión',ft(D.pa),'Elevación '+ELEV+' ft · QNH '+S.qnh],
+   ['Altitud de densidad',ft(D.da),D.da>ELEV+2000?'Rendimiento reducido':'Cercana a la estándar'],
+   ['Viento de frente',(hd>=0?hd:'cola '+Math.abs(hd))+' kt','En RWY '+pad(D.H/10,2)],
+   ['Viento cruzado',Math.abs(cr)+' kt',cr>0?'Desde la derecha':cr<0?'Desde la izquierda':'Sin componente']];
+  $('#metrics').innerHTML=M.map(m=>'<div class="metric"><div class="l">'+m[0]+'</div><div class="v"'+(m[0]==='Categoría'?' style="color:var(--'+D.cat.toLowerCase()+')"':'')+'>'+m[1]+'</div><div class="n">'+m[2]+'</div></div>').join('')}
+function icingWarn(){const o=[];D.act.forEach(l=>{if(['Ci','Cs','Cc'].includes(l.type))return;const top=l.base+TYPES[l.type].add;if(top>D.fl&&l.base<D.fl20&&S.T>-5)o.push(l)});return o}
+function renderHints(){const h=[],add=(k,t)=>h.push([k,t]);
+  const has=t=>D.act.some(l=>l.type===t),any=a=>a.some(has),dom=D.act.filter(l=>l.okt>=3).map(l=>l.type);
+  add(D.cat==='VFR'?'ok':D.cat==='MVFR'?'warn':'bad','Categoría '+D.cat+': techo '+(D.ceil===Infinity?'sin techo':fmt(D.ceil)+' ft')+' y visibilidad '+visTxt(D.vis)+'.');
+  if(D.spread<=2&&D.vis>=5000&&S.wx==='NONE'&&S.T>3)add('warn','T − Td es de '+D.spread+' °C: el aire está casi saturado. Se esperan neblina, niebla o estratos bajos.');
+  if(S.wx==='FG'&&D.spread>1)add('bad','Niebla con T − Td > 1 °C no es coherente: la niebla se forma con aire saturado.');
+  if(S.wx==='BR'&&D.spread>3)add('warn','La neblina se da con T − Td ≤ 2–3 °C. Con más diferencia sería bruma seca (HZ).');
+  if((S.wx==='RA'||S.wx==='DZ')&&!any(['Ns','As','St','Sc','Cb','TCU']))add('bad',WX[S.wx].n+' necesita nubes que la produzcan: '+(S.wx==='DZ'?'St o Sc':'Ns, As o nubes convectivas')+'.');
+  if(S.wx==='SHRA'&&!any(['Cu','TCU','Cb']))add('bad','Un chubasco proviene de nubes convectivas (Cu, TCU o Cb).');
+  if(D.ts&&!has('Cb'))add('bad','No hay tormenta sin Cb: añade un cumulonimbo.');
+  if(D.ts&&has('Cb'))add('bad','Cumulonimbo con tormenta: turbulencia severa, cizalladura, granizo y rayos. Evita a 20 NM como mínimo.');
+  if(S.wx==='SN'&&S.T>3)add('bad','Con '+S.T+' °C en superficie la nieve se derrite antes de llegar al suelo. Baja la temperatura.');
+  if((S.wx==='RA'||S.wx==='DZ')&&S.T<=0)add('warn','Precipitación líquida con T ≤ 0 °C puede ser engelante (FZRA/FZDZ): riesgo muy alto.');
+  if(WX[S.wx].p&&!D.act.length)add('warn','Hay precipitación sin nubes activas. En la realidad cae de una capa.');
+  const ic=icingWarn();if(ic.length)add('warn','Engelamiento posible en '+ic.map(l=>l.type).join(', ')+': la capa contiene agua líquida entre 0 °C ('+fmt(D.fl)+' ft) y −20 °C ('+fmt(D.fl20)+' ft).');
+  const cv=D.act.filter(l=>['Cu','TCU','Cb'].includes(l.type));cv.forEach(l=>{const e=Math.max(0,D.spread)*400;if(Math.abs(l.base-e)/Math.max(e,500)>.4)add('warn','Base de '+l.type+' en '+fmt(l.base)+' ft, pero con T − Td = '+D.spread+' °C la base convectiva esperada es ≈ '+fmt(e)+' ft.')});
+  if(D.act.some(l=>l.type==='Cu'&&l.okt>=3)&&!D.ts)add('blue','Los cúmulos indican térmicas: turbulencia ligera a moderada bajo la base.');
+  if(D.act.some(l=>l.base>5000&&!['Cb','TCU'].includes(l.type)))add('blue','Las capas con base sobre 5 000 ft no se incluyen en el METAR (salvo CB y TCU).');
+  if(D.vis<D.wv+1&&D.vis<S.vis)add('blue','La visibilidad efectiva ('+visTxt(D.vis)+') está limitada por el fenómeno. La base ajustada es '+visTxt(S.vis)+'.');
+  if(Math.abs(D.cross)>=20)add('bad','Viento cruzado de '+Math.round(Math.abs(D.cross))+' kt en RWY '+pad(D.H/10,2)+': supera los límites de muchas aeronaves. Evalúa otra pista.');
+  else if(Math.abs(D.cross)>=15)add('warn','Viento cruzado de '+Math.round(Math.abs(D.cross))+' kt: cerca de los límites de aeronaves ligeras.');
+  if(D.head<-5)add('bad','Viento de cola de '+Math.round(-D.head)+' kt en RWY '+pad(D.H/10,2)+': usa la pista contraria.');
+  if(D.gustOn&&D.ts)add('bad','Ráfagas con tormenta: posible cizalladura y microrráfaga en final.');
+  else if(D.gustOn)add('warn','Ráfagas de '+(S.wspd+S.gust)+' kt: turbulencia mecánica y variación de velocidad en aproximación.');
+  if(S.qnh<1000)add('blue','QNH bajo ('+S.qnh+' hPa): zona de bajas presiones, asociada a nubosidad y tiempo inestable.');
+  if(D.da>ELEV+2500)add('warn','Altitud de densidad de '+fmt(D.da)+' ft: mayor carrera de despegue y menor ascenso.');
+  $('#hints').innerHTML=h.map(x=>'<div class="hint '+x[0]+'">'+x[1]+'</div>').join('')}
+function renderRw(){const H=D.H,w=S.wdir,sx=a=>50+Math.sin(a*RAD),k=(a,r)=>[50+Math.sin(a*RAD)*r,50-Math.cos(a*RAD)*r];
+  const p1=k(w,46),p2=k(w,19),hd=k(w+14,26),hd2=k(w-14,26);
+  const best=D.head>=0?pad(H/10,2):pad(rwyB(H/10),2),hw=Math.round(Math.abs(D.head)),cw=Math.round(Math.abs(D.cross));
+  $('#rwSvg').innerHTML='<circle cx="50" cy="50" r="47" style="fill:none;stroke:var(--line);stroke-width:1.5"/><text x="50" y="11" text-anchor="middle" style="font:600 8px var(--f-mono);fill:var(--muted)">N</text>'+
+   '<g transform="rotate('+H+' 50 50)"><rect x="46.2" y="14" width="7.6" height="72" rx="1" style="fill:var(--ink)"/><line x1="50" y1="18" x2="50" y2="82" style="stroke:var(--surface);stroke-width:1;stroke-dasharray:4 3"/></g>'+
+   (S.wspd>0?'<line x1="'+p1[0]+'" y1="'+p1[1]+'" x2="'+p2[0]+'" y2="'+p2[1]+'" style="stroke:var(--accent);stroke-width:3;stroke-linecap:round"/><polygon points="'+p2[0]+','+p2[1]+' '+hd[0]+','+hd[1]+' '+hd2[0]+','+hd2[1]+'" style="fill:var(--accent)"/>':'');
+  $('#rwTxt').innerHTML='<div class="h">Pista en uso sugerida</div><div style="font:700 30px/1.1 var(--f-display);letter-spacing:.04em">RWY '+best+'</div><div style="font-size:12.5px;color:var(--muted);margin-top:2px">'+(S.wspd<=3?'Viento casi calmo: cualquier pista sirve.':'Viento de frente '+hw+' kt · cruzado '+cw+' kt '+(D.cross>0?'por la derecha':D.cross<0?'por la izquierda':''))+'</div>'}
+
+/* -- sincronización -- */
+function syncUI(){
+  syncs.forEach(f=>f());
+  $$('#layerTabs .lt').forEach((b,i)=>{const L=S.layers[i];b.setAttribute('aria-pressed',i===S.sel);b.classList.toggle('act',L.on&&L.okt>0);b.querySelector('small').textContent=L.on&&L.okt>0?L.type+' · '+L.okt+'/8 · '+fmt(L.base)+' ft':'Apagada'});
+  const L=S.layers[S.sel];$('#layerOn').checked=L.on&&L.okt>0;
+  $$('#types .type').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===L.type));
+  const t=TYPES[L.type],bc=$('#bConv');if(bc){const e=clamp(Math.round(Math.max(0,S.T-S.Td)*400/100)*100,t.min,t.max);bc.textContent='Usar base convectiva ('+fmt(e)+' ft)';bc.style.display=['Cu','TCU','Cb'].includes(L.type)?'':'none'}
+  $$('#wxChips .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===S.wx));
+  inc.style.display=HAS_INT(S.wx)&&S.wx!=='TSGR'?'':'none';
+  $$('#intenChips .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===S.inten));
+  if(HAS_INT(S.wx)&&WX[S.wx].vis['-']===undefined)$$('#intenChips .chip')[0].style.display='none';else $$('#intenChips .chip')[0].style.display='';
+  renderTypeCard();renderAlt();renderMetrics();renderHints();renderRw();
+}
+$$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+b.dataset.t))});
+
+/* ========= tráfico aéreo ========= */
+const TAN3=Math.tan(3*RAD),HOLD_A=16,HOLD_R=3,V_APP=.33,AIRL=['AVA','CMP','CMA','DAL','UAL','IBE','AAL'];
+const trG=new THREE.Group();rwy.add(trG);
+const acProto=(function(){const g=new THREE.Group(),m=new THREE.MeshBasicMaterial({color:0xf4f6f8,fog:false,depthTest:false}),m2=new THREE.MeshBasicMaterial({color:0xff6a1a,fog:false,depthTest:false});
+  const f=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,1,10),m);f.rotation.z=Math.PI/2;
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(.045,.16,10),m);nose.rotation.z=-Math.PI/2;nose.position.x=.58;
+  const w=new THREE.Mesh(new THREE.BoxGeometry(.2,.012,.95),m);w.position.x=.05;
+  const t=new THREE.Mesh(new THREE.BoxGeometry(.12,.1,.012),m2);t.position.set(-.46,.07,0);
+  const ts=new THREE.Mesh(new THREE.BoxGeometry(.1,.01,.3),m);ts.position.set(-.46,.03,0);
+  g.add(f,nose,w,t,ts);g.traverse(o=>{if(o.isMesh)o.renderOrder=998});return g})();
+const planes=[];let dirL=1,spawnT=2,uiT=0,blkT=0,blk={n:0,a:99},tally={land:0,div:0},fleetN=0;
+const trLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x39c0ff,transparent:true,opacity:.55,fog:false}));
+const trRing=new THREE.LineLoop(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xffb347,transparent:true,opacity:.7,fog:false}));
+trG.add(trLine,trRing);
+const lp=(a,l,y)=>new THREE.Vector3(-dirL*(1.5+a),y,l);
+function buildTrLines(){trLine.geometry.dispose();trRing.geometry.dispose();
+  trLine.geometry=new THREE.BufferGeometry().setFromPoints([lp(0,0,.01),lp(HOLD_A,0,HOLD_A*TAN3),lp(32,0,32*TAN3)]);
+  const p=[];for(let i=0;i<64;i++){const s=i/64*Math.PI*2;p.push(lp(HOLD_A-HOLD_R*Math.sin(s),HOLD_R*(1-Math.cos(s)),HOLD_A*TAN3))}
+  trRing.geometry=new THREE.BufferGeometry().setFromPoints(p)}
+function clearPlanes(){planes.forEach(p=>{trG.remove(p.g);p.lb.material.map.dispose();p.lb.material.dispose()});planes.length=0}
+function spawnPlane(){const g=acProto.clone(),id=rnd(AIRL)+(100+Math.floor(Math.random()*900));g.rotation.order='YZX';
+  const lb=labelSprite(id,{w:330,h:64,fs:28,sx:4.6,sy:.9});lb.material.depthTest=false;lb.renderOrder=999;g.add(lb);trG.add(g);
+  planes.push({g,lb,id,st:'app',a:30,psi:0,alt:30*TAN3,lat:0,x:0,y:0,z:0,note:'',first:true});fleetN++}
+function pathBlocked(){rwy.updateMatrixWorld(true);let n=0,best=99;const v=new THREE.Vector3();
+  LAY.forEach((o,i)=>{const L=S.layers[i];if(!L.on||L.type!=='Cb'||!o.root.visible)return;
+    o.cbs.forEach(g=>{v.set(g.position.x,0,g.position.z);rwy.worldToLocal(v);const a=-dirL*v.x-1.5;
+      if(a>-3&&a<26&&Math.abs(v.z)<8){n++;best=Math.min(best,Math.max(0,a))}})});return {n,a:best}}
+function atcRules(){const low=D.ceil<200||D.vis<550,wxl=Math.abs(D.cross)>30;return {low,wxl,hold:blk.n>0,go:low||wxl}}
+const stTxt={app:'ILS',hold:'RETENCIÓN',ga:'AL AIRE',land:'ATERRIZANDO'};
+function stepTraffic(dt){
+  trG.visible=S.showTr;if(!S.showTr)return;
+  blkT-=dt;if(blkT<=0){blkT=.4;blk=pathBlocked()}
+  const R=atcRules();
+  spawnT-=dt;if(spawnT<=0){spawnT=9;if(planes.length<3&&!planes.some(p=>p.st==='app'&&p.a>20))spawnPlane()}
+  const sc=S.view==='tower'?.4:3,sorted=planes.filter(p=>p.st==='app').sort((a,b)=>a.a-b.a);
+  for(let k=planes.length-1;k>=0;k--){const p=planes[k],px=p.x,py=p.y,pz=p.z;let v=V_APP;
+    if(p.st==='app'){const lead=sorted[sorted.indexOf(p)-1],hd=planes.find(q=>q.st==='hold'&&q.psi<1.1);
+      const ahead=lead?lead.a:(hd?HOLD_A:-99);if(ahead>-90&&p.a-ahead<2.6&&p.a>ahead)v=0;
+      p.a-=v*dt;p.lat=0;p.alt=Math.max(0,p.a*TAN3);
+      if(p.a<=HOLD_A&&p.a>HOLD_A-1&&R.hold){p.st='hold';p.psi=0;p.a=HOLD_A}
+      else if(p.a<=1.3&&p.a>0&&R.go&&!p.decided){p.decided=true;p.st='ga';p.note=R.low?'bajo mínimos':'viento fuera de límites'}
+      else if(p.a<=-.2)p.st='land'}
+    else if(p.st==='hold'){const TP=Math.PI*2;if(planes.some(q=>q!==p&&q.st==='hold'&&((q.psi-p.psi)%TP+TP)%TP<.9))v=0;p.psi+=v/HOLD_R*dt;p.alt=HOLD_A*TAN3;
+      if(p.psi>=Math.PI*2){p.psi-=Math.PI*2;if(!R.hold){p.st='app';p.a=HOLD_A}}
+      if(p.st==='hold'){p.a=HOLD_A-HOLD_R*Math.sin(p.psi);p.lat=HOLD_R*(1-Math.cos(p.psi))}}
+    else if(p.st==='ga'){p.a-=v*dt;p.alt+=.03*dt;p.lat=0;if(p.a<-14){tally.div++;trG.remove(p.g);p.lb.material.map.dispose();p.lb.material.dispose();planes.splice(k,1);continue}}
+    else if(p.st==='land'){const f=1-smooth(-.2,-3,p.a)*.85;p.a-=v*f*dt;p.alt=0;p.lat=0;if(p.a<-3.2){tally.land++;trG.remove(p.g);p.lb.material.map.dispose();p.lb.material.dispose();planes.splice(k,1);continue}}
+    const pos=lp(p.a,p.lat,p.alt);p.x=pos.x;p.y=pos.y;p.z=pos.z;p.g.position.copy(pos);p.g.scale.setScalar(sc);
+    if(!p.first){const dx=p.x-px,dz=p.z-pz,dy=p.y-py,h=Math.hypot(dx,dz);if(h>1e-5)p.g.rotation.set(0,Math.atan2(-dz,dx),Math.atan2(dy,h)*1)}else{p.first=false;p.g.rotation.set(0,dirL>0?0:Math.PI,0)}
+    p.lb.position.set(0,1.2,0);{const k=(S.view==='tower'?1.8:5.5)/sc;p.lb.scale.set(k,k*.2,1)}
+    const txt=p.id+' · '+stTxt[p.st];if(p.lt!==txt){p.lt=txt;setLabel(p.lb,txt)}}
+  uiT-=dt;if(uiT<=0){uiT=.6;trafficUI()}
+}
+function refreshTraffic(){const nd=D.head>=0?1:-1;if(nd!==dirL||!trLine.geometry.attributes.position){dirL=nd;clearPlanes();buildTrLines()}
+  trG.visible=S.showTr;trRing.visible=planes.some(p=>p.st==='hold');trafficUI()}
+function trafficUI(){const el=$('#trafficBox');if(!el)return;const R=atcRules(),rw='RWY '+pad((dirL>0?D.H:(D.H+180)%360)/10,2),h=[];
+  trRing.visible=planes.some(p=>p.st==='hold');
+  h.push(['ok','Pista en uso: <b>'+rw+'</b>, viento de frente '+Math.round(Math.abs(D.head))+' kt.']);
+  if(R.hold)h.push(['bad','Cb a '+(blk.a<99?blk.a.toFixed(0)+' km de':'sobre')+' la final: el tráfico entra en <b>retención</b> hasta que libere.']);
+  if(D.vis<550)h.push(['bad','Visibilidad '+visTxt(D.vis)+' bajo 550 m: sin mínimos CAT I, <b>aproximación frustrada</b>.']);
+  else if(D.ceil<200)h.push(['bad','Techo '+fmt(D.ceil)+' ft bajo la altura de decisión (200 ft): <b>aproximación frustrada</b>.']);
+  if(Math.abs(D.cross)>30)h.push(['bad','Viento cruzado de '+Math.round(Math.abs(D.cross))+' kt sobre 30 kt: aproximación frustrada.']);
+  if(D.head<-2)h.push(['blue','Viento de cola en la pista '+pad(D.H/10,2)+': se opera por la pista contraria.']);
+  if(!R.go&&!R.hold)h.push(['ok','Dentro de mínimos CAT I: aproximaciones ILS autorizadas.']);
+  else if(!R.go&&R.hold)h.push(['warn','Cuando el Cb se aleje de la final se reanudan las aproximaciones.']);
+  if(D.cat==='IFR'||D.cat==='LIFR')h.push(['warn','Condiciones '+D.cat+': el tráfico VFR no puede operar, solo IFR.']);
+  const list=planes.map(p=>'<div class="hint '+(p.st==='hold'?'warn':p.st==='ga'?'bad':'ok')+'"><div><b>'+p.id+'</b> · '+stTxt[p.st].toLowerCase()+(p.st==='ga'?' ('+p.note+')':'')+'</div></div>').join('');
+  el.innerHTML=h.map(x=>'<div class="hint '+x[0]+'"><div>'+x[1]+'</div></div>').join('')+list+'<div class="score" style="padding:2px 2px 0">Aterrizajes: '+tally.land+' · Desviados: '+tally.div+'</div>'}
+
+/* ========= guía ========= */
+$('#p-guia').innerHTML=
+'<div class="sec"><p class="h">Categorías de vuelo</p><div class="scroll-x"><table class="ref"><thead><tr><th>Cat.</th><th>Techo</th><th></th><th>Visibilidad</th></tr></thead><tbody>'+
+'<tr><td><span class="cat-dot" style="--c:var(--vfr)"></span>VFR</td><td>&gt; 3 000 ft</td><td>y</td><td>&gt; 5 SM (8 km)</td></tr>'+
+'<tr><td><span class="cat-dot" style="--c:var(--mvfr)"></span>MVFR</td><td>1 000–3 000 ft</td><td>o</td><td>3–5 SM</td></tr>'+
+'<tr><td><span class="cat-dot" style="--c:var(--ifr)"></span>IFR</td><td>500–999 ft</td><td>o</td><td>1–&lt; 3 SM</td></tr>'+
+'<tr><td><span class="cat-dot" style="--c:var(--lifr)"></span>LIFR</td><td>&lt; 500 ft</td><td>o</td><td>&lt; 1 SM (1 600 m)</td></tr></tbody></table></div>'+
+'<p style="color:var(--muted);font-size:12.5px;margin:0">Manda el valor más restrictivo. Techo = base de la capa más baja con 5/8 o más (BKN u OVC), o la visibilidad vertical si el cielo está oculto.</p></div>'+
+'<div class="sec"><p class="h">Cobertura nubosa</p><div class="scroll-x"><table class="ref"><thead><tr><th>Código</th><th>Octas</th><th>Significado</th></tr></thead><tbody>'+
+'<tr><td>SKC</td><td>0</td><td>Cielo despejado</td></tr><tr><td>FEW</td><td>1–2</td><td>Escasas</td></tr><tr><td>SCT</td><td>3–4</td><td>Dispersas</td></tr><tr><td>BKN</td><td>5–7</td><td>Fragmentadas (forman techo)</td></tr><tr><td>OVC</td><td>8</td><td>Cubierto (forma techo)</td></tr></tbody></table></div></div>'+
+'<div class="sec"><p class="h">Niveles de nubes</p><div class="scroll-x"><table class="ref"><thead><tr><th>Nivel</th><th>Latitudes medias</th><th>Trópico</th></tr></thead><tbody>'+
+'<tr><td>Altas</td><td>16 500–45 000 ft</td><td>20 000–60 000 ft</td></tr><tr><td>Medias</td><td>6 500–23 000 ft</td><td>6 500–25 000 ft</td></tr><tr><td>Bajas</td><td>hasta 6 500 ft</td><td>hasta 6 500 ft</td></tr></tbody></table></div>'+
+'<p style="color:var(--muted);font-size:12.5px;margin:0">Las alturas varían con la latitud y la estación. En el trópico la troposfera es más alta, y los Cb pueden superar los 50 000 ft. El simulador usa rangos típicos para aprender, no límites rígidos.</p></div>'+
+'<div class="sec"><p class="h">Reglas prácticas</p>'+
+'<div class="rule">Base de cúmulos ≈ <b>(T − Td) × 400 ft</b> (125 m por °C).</div>'+
+'<div class="rule">Gradiente estándar: <b>−2 °C por 1 000 ft</b>. Nivel 0 °C ≈ T ÷ 2 × 1 000 ft.</div>'+
+'<div class="rule">Engelamiento: agua líquida entre <b>0 °C y −20 °C</b> (As, Ns, Sc, Cu, Cb).</div>'+
+'<div class="rule">Viento de frente = V × <b>cos α</b>. Cruzado = V × <b>sin α</b>, con α entre viento y pista.</div>'+
+'<div class="rule">1 hPa ≈ <b>27 ft</b>. Atmósfera estándar: 1 013,25 hPa y 15 °C.</div>'+
+'<div class="rule">1 kt = 0,514 m/s. 1 SM = 1 609 m. 1 NM = 1 852 m.</div>'+
+'<div class="rule">ILS CAT I: altura de decisión <b>200 ft</b> y RVR <b>550 m</b>. Bajo esos mínimos, se frustra la aproximación.</div></div>'+
+'<div class="sec"><p class="h">Leer el METAR</p><div class="card tint"><code style="font:600 12.5px/1.6 var(--f-mono);word-break:break-word">XXXX 241100Z 09008KT 9999 SCT035 28/20 Q1013</code>'+
+'<dl class="kv"><dt>XXXX</dt><dd>Estación (código ICAO)</dd><dt>241100Z</dt><dd>Día 24, 11:00 UTC</dd><dt>09008KT</dt><dd>Viento desde 090°, 8 kt</dd><dt>9999</dt><dd>Visibilidad 10 km o más</dd><dt>SCT035</dt><dd>3–4 octas a 3 500 ft</dd><dt>28/20</dt><dd>Temperatura / punto de rocío (M = negativo)</dd><dt>Q1013</dt><dd>QNH en hPa</dd></dl>'+
+'<p style="margin:0;font-size:12.5px;color:var(--muted)">CAVOK sustituye visibilidad, tiempo presente y nubes cuando la visibilidad es ≥ 10 km, no hay nubes bajo 5 000 ft ni CB/TCU, y no hay fenómenos.</p></div></div>'+
+'<div class="sec"><p class="h">Códigos de tiempo presente</p><div class="scroll-x"><table class="ref"><tbody>'+
+'<tr><td>−  +</td><td>Ligero / fuerte (sin signo, moderado)</td></tr><tr><td>BR</td><td>Neblina (1 000–5 000 m)</td></tr><tr><td>FG</td><td>Niebla (&lt; 1 000 m)</td></tr><tr><td>HZ</td><td>Bruma seca</td></tr><tr><td>DZ</td><td>Llovizna</td></tr><tr><td>RA</td><td>Lluvia</td></tr><tr><td>SHRA</td><td>Chubasco de lluvia</td></tr><tr><td>TS</td><td>Tormenta (TSRA con lluvia, TSGR con granizo)</td></tr><tr><td>SN</td><td>Nieve</td></tr><tr><td>VV</td><td>Visibilidad vertical, cielo oculto</td></tr></tbody></table></div></div>'+
+'<p style="color:var(--muted);font-size:12px;margin:0">Esta herramienta es solo de estudio. No sustituye los productos meteorológicos oficiales ni la normativa de tu autoridad aeronáutica.</p>';
+
+/* ========= práctica ========= */
+let Q=null,score=[0,0];
+const rnd=a=>a[Math.floor(Math.random()*a.length)],shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+function randomScenario(){const p=JSON.parse(JSON.stringify(rnd(PRESETS)));const s=p.s;
+  s.layers.forEach(l=>{if(l[2]>0){const t=TYPES[l[1]];l[3]=clamp(Math.round(l[3]*(.7+Math.random()*.7)/100)*100,t.min,t.max);l[2]=clamp(l[2]+Math.floor(Math.random()*3)-1,1,8)}});
+  s.hour=Math.floor(Math.random()*24);s.wdir=Math.floor(Math.random()*72)*5;if(s.wspd>0)s.wspd=clamp(s.wspd+Math.floor(Math.random()*9)-3,3,30);
+  s.T=clamp(s.T+Math.floor(Math.random()*5)-2,-10,38);s.Td=Math.min(s.T,s.Td+Math.floor(Math.random()*3)-1);
+  const keep=Math.floor(Math.random()*36)+1;applyPreset(p,true);S.rwy=keep;drawRunway();changed({wind:1})}
+function opts(correct,pool,n){const set=new Set([correct]);shuffle(pool.slice()).forEach(x=>{if(set.size<n)set.add(x)});return shuffle([...set])}
+function newQ(){randomScenario();const kinds=['cat','ceil','rwy','cloud'];let k=rnd(kinds),tries=0;
+  while(tries++<20){if(k==='ceil'&&D.ceil===Infinity){k=rnd(kinds);continue}if(k==='rwy'&&Math.abs(D.head)<2){k=rnd(kinds);continue}if(k==='cloud'&&!D.act.length){k=rnd(kinds);continue}break}
+  if(k==='ceil'&&D.ceil===Infinity)k='cat';if(k==='rwy'&&Math.abs(D.head)<2)k='cat';if(k==='cloud'&&!D.act.length)k='cat';
+  if(k==='cat')Q={k,q:'Con este METAR, ¿qué categoría de vuelo tiene el aeródromo?',o:['VFR','MVFR','IFR','LIFR'],a:D.cat,why:'Techo '+(D.ceil===Infinity?'sin techo':fmt(D.ceil)+' ft')+' y visibilidad '+visTxt(D.vis)+' dan '+D.cat+'. Limita: '+D.lim+'.'};
+  if(k==='ceil'){const c=D.ceil,mk=v=>fmt(v)+' ft',pool=[c*2,Math.round(c/2/100)*100,c+1500,Math.max(100,c-400),c+4000,Math.max(100,Math.round(c*.7/100)*100)].filter(v=>v!==c&&v>=100).map(mk);
+    Q={k,q:'¿A qué altura está el techo de nubes?',o:opts(mk(c),pool,4),a:mk(c),why:'El techo es la base de la capa más baja con 5/8 o más (BKN u OVC): '+mk(c)+(D.vv?' (VV001, cielo oculto por la niebla)':'')+'.'}}
+  if(k==='rwy'){const a=pad(D.H/10,2),b=pad(rwyB(D.H/10),2),c=D.head>=0?a:b;Q={k,q:'El viento es '+pad(S.wdir===0?360:S.wdir,3)+'° / '+S.wspd+' kt'+(D.gustOn?' (ráfagas '+(S.wspd+S.gust)+')':'')+'. ¿Qué pista usas para aterrizar? Pista '+a+'/'+b+'.',o:[a,b],a:c,why:'Se aterriza contra el viento. Componente de frente en '+a+': '+Math.round(D.head)+' kt (negativo = cola). Elige '+c+'.'}}
+  if(k==='cloud'){const l=D.act[0],t=TYPES[l.type];Q={k,q:'En la escena, la capa más baja es '+COVER(l.okt)+' a '+fmt(l.base)+' ft. ¿Qué nube es?',o:opts(t.n,TKEYS.filter(x=>TYPES[x].lvl===t.lvl||Math.random()<.3).map(x=>TYPES[x].n),4),a:t.n,why:t.n+': '+t.look}}
+  Q.done=false;renderQ()}
+function renderQ(){const box=$('#qBox');if(!Q){box.innerHTML='';return}
+  box.innerHTML='<div class="card"><div class="quiz-q">'+Q.q+'</div><div class="opts" id="qOpts"></div><div id="qFb"></div></div>';
+  const o=$('#qOpts');Q.o.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>answer(b,t);o.append(b)})}
+function answer(btn,t){if(Q.done)return;Q.done=true;score[1]++;const ok=t===Q.a;if(ok)score[0]++;
+  $$('#qOpts button').forEach(b=>{if(b.textContent===Q.a)b.classList.add('right');else if(b===btn)b.classList.add('wrong');b.disabled=true});
+  $('#qFb').innerHTML='<div class="hint '+(ok?'ok':'bad')+'" style="margin-top:8px"><div><b>'+(ok?'Correcto. ':'No es esa. ')+'</b>'+Q.why+'</div></div>';$('#qScore').textContent=score[0]+' / '+score[1]}
+$('#qNew').onclick=newQ;
+
+/* ========= inicio ========= */
+drawRunway();buildWind();for(let i=0;i<3;i++)buildLayer(i);buildCloudUI();
+applyPreset(PRESETS[1]);resize();resetCam();rebuildHints();
+S.rwy=9;drawRunway();applyEnv();syncUI();
+requestAnimationFrame(loop);
+window.__meteo={S,get D(){return D},tr:{step:stepTraffic,planes,tally,pathBlocked,LAY}};
+})();
+</script>
+
+</body></html>
