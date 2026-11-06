@@ -1,0 +1,38 @@
+Meteo ATC 3D
+Copyright (c) 2026 Delta Charlie (https://github.com/Bugaryy)
+Todos los derechos reservados.
+
+Este software, incluidos su código fuente, su diseño, sus textos y sus
+elementos gráficos (en conjunto, el "Software"), es propiedad exclusiva de
+su autor, Delta Charlie. No se concede ninguna licencia, expresa o implícita,
+sobre el Software, salvo los permisos que se indican a continuación.
+
+PERMITIDO
+- Ver y usar el Software en el navegador, en la forma en que su autor lo
+  publica, para fines personales y de estudio.
+
+NO PERMITIDO, sin autorización previa y por escrito del autor
+- Copiar, reproducir o redistribuir el Software, total o parcialmente.
+- Modificarlo, traducirlo o crear obras derivadas a partir de él.
+- Publicarlo, alojarlo o ponerlo a disposición de terceros en otro sitio
+  o medio.
+- Venderlo, sublicenciarlo, alquilarlo o usarlo con fines comerciales.
+- Retirar o alterar los avisos de autoría y de derechos reservados.
+- Extraer su código o sus recursos para usarlos en otros proyectos.
+
+Para solicitar permiso o una licencia comercial, contacta al autor a través
+de https://github.com/Bugaryy
+
+EXENCIÓN DE GARANTÍA
+El Software se ofrece "tal cual", sin garantía de ningún tipo, expresa o
+implícita, incluidas las de comerciabilidad, idoneidad para un propósito
+particular y no infracción. Es una herramienta educativa y de simulación: no
+debe usarse para la planificación de vuelos, la toma de decisiones
+operacionales ni como fuente meteorológica oficial. En ningún caso el autor
+será responsable de reclamaciones, daños u otras responsabilidades derivadas
+del uso del Software.
+
+Los nombres de terceros que aparezcan (por ejemplo, de aeropuertos o de
+bibliotecas de software) pertenecen a sus respectivos titulares. La
+biblioteca Three.js se carga desde un CDN y se rige por su propia licencia
+(MIT).
