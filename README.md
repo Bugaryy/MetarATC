@@ -46,12 +46,6 @@ La interfaz tiene una escena 3D a la izquierda y, a la derecha, un panel de mand
 
 Se necesita conexión a internet para cargar Three.js y las tipografías.
 
-## Publicar en GitHub Pages
-
-1. Sube el archivo HTML al repositorio con el nombre `index.html`, junto con `README.md` y `LICENSE`.
-2. En **Settings → Pages**, elige la rama y la carpeta raíz.
-3. La página queda disponible en `https://bugaryy.github.io/<repositorio>/`.
-
 ## Tecnología
 
 - Un solo archivo HTML, sin pasos de compilación.
